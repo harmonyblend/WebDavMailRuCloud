@@ -15,7 +15,7 @@ namespace YaR.Clouds.Console
         static Config()
         {
             Document = new XmlDocument();
-            string location = Path.GetDirectoryName(typeof(Config).Assembly.Location) 
+            string location = Path.GetDirectoryName(typeof(Config).Assembly.Location)
                 ?? throw new DirectoryNotFoundException("Cannot locate assembly directory");
             var configpath = Path.Combine(location, "wdmrc.config");
             Document.Load(File.OpenRead(configpath));
@@ -28,9 +28,9 @@ namespace YaR.Clouds.Console
         {
             get
             {
-                var e = (XmlElement) Document.SelectSingleNode("/config/log4net");
+                var e = (XmlElement)Document.SelectSingleNode("/config/log4net");
                 var nz = e?.SelectNodes("appender/file");
-                if (nz == null) 
+                if (nz == null)
                     return e;
 
                 foreach (XmlNode eChildNode in nz)
@@ -54,7 +54,7 @@ namespace YaR.Clouds.Console
                     var res = Document.SelectSingleNode("/config/DefaultUserAgent")?.InnerText;
                     return res;
                 }
-                catch(Exception)
+                catch (Exception)
                 {
                     return null;
                 }
@@ -71,7 +71,7 @@ namespace YaR.Clouds.Console
                     var res = Document.SelectSingleNode("/config/DefaultSecChUa")?.InnerText;
                     return res;
                 }
-                catch(Exception)
+                catch (Exception)
                 {
                     return null;
                 }
@@ -113,16 +113,16 @@ namespace YaR.Clouds.Console
                     string password = null;
                     string dir = null;
                     var node = Document.SelectSingleNode("/config/BrowserAuthenticator");
-                    foreach(XmlAttribute attr in node.Attributes)
+                    foreach (XmlAttribute attr in node.Attributes)
                     {
-                        if(attr.LocalName.Equals("Url", StringComparison.OrdinalIgnoreCase))
+                        if (attr.LocalName.Equals("Url", StringComparison.OrdinalIgnoreCase))
                             url = attr.Value;
-                        if(attr.LocalName.Equals("password", StringComparison.OrdinalIgnoreCase))
+                        if (attr.LocalName.Equals("password", StringComparison.OrdinalIgnoreCase))
                             password = attr.Value;
-                        if(attr.LocalName.Equals("CacheDir", StringComparison.OrdinalIgnoreCase))
+                        if (attr.LocalName.Equals("CacheDir", StringComparison.OrdinalIgnoreCase))
                             dir = attr.Value;
                     }
-                    if(url!=null || dir!=null)
+                    if (url != null || dir != null)
                     {
                         YaR.Clouds.WebDavStore.BrowserAuthenticator.Instance = new BrowserAuthenticatorInfo(
                             url,
@@ -131,7 +131,7 @@ namespace YaR.Clouds.Console
                             );
                     }
                 }
-                catch(Exception)
+                catch (Exception)
                 {
                     // ignored
                 }
@@ -180,7 +180,7 @@ namespace YaR.Clouds.Console
         {
             get
             {
-                if (null != _webDAVProps) 
+                if (null != _webDAVProps)
                     return _webDAVProps;
 
                 try
@@ -209,7 +209,7 @@ namespace YaR.Clouds.Console
         {
             get
             {
-                if (null != _deduplicateRulesBag) 
+                if (null != _deduplicateRulesBag)
                     return _deduplicateRulesBag;
 
                 try

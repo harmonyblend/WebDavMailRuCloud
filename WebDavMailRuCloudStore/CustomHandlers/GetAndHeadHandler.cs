@@ -148,14 +148,14 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
                     }
 
                     // HEAD method doesn't require the actual item data
-                    if (head) 
+                    if (head)
                         return true;
 
                     try
                     {
                         await CopyToAsync(stream, response.Stream, 0, stream.Length - 1).ConfigureAwait(false);
                     }
-                    catch(System.Net.HttpListenerException)
+                    catch (System.Net.HttpListenerException)
                     {
                         // Client is disconnected, we can not write to the stream any more
                         response.Abort();

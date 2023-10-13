@@ -18,7 +18,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
         public YadWebAuth(HttpCommonSettings settings, IBasicCredentials creds)
         {
-       
+
             _settings = settings;
             _creds = creds;
             Cookies = new CookieContainer();
@@ -90,7 +90,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
             DiskSk = /*YadAuth.DiskSk*/ response.Sk;
             Uuid = /*YadAuth.Uuid*/response.Uuid; //yandexuid
 
-            foreach(var item in response.Cookies)
+            foreach (var item in response.Cookies)
             {
                 var cookie = new Cookie(item.Name, item.Value, item.Path, item.Domain);
                 Cookies.Add(cookie);
@@ -104,7 +104,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
         {
             (BrowserAppResponse response, string responseHtml) = await ConnectToBrowserApp();
 
-            if(response!=null &&
+            if (response != null &&
                 !string.IsNullOrEmpty(response.Sk) &&
                 !string.IsNullOrEmpty(response.Uuid) &&
                 !string.IsNullOrEmpty(response.Login) &&
@@ -116,14 +116,14 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                 DiskSk = /*YadAuth.DiskSk*/ response.Sk;
                 Uuid = /*YadAuth.Uuid*/response.Uuid; //yandexuid
 
-                foreach(var item in response.Cookies)
+                foreach (var item in response.Cookies)
                 {
                     var cookie = new Cookie(item.Name, item.Value, item.Path, item.Domain);
                     Cookies.Add(cookie);
                 }
 
                 // Если аутентификация прошла успешно, сохраняем результат в кеш в файл
-                if(!string.IsNullOrEmpty(_settings.CloudSettings.BrowserAuthenticatorCacheDir))
+                if (!string.IsNullOrEmpty(_settings.CloudSettings.BrowserAuthenticatorCacheDir))
                 {
                     string path = Path.Combine(
                         _settings.CloudSettings.BrowserAuthenticatorCacheDir,
@@ -132,10 +132,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                     try
                     {
                         string dir = Path.GetDirectoryName(path);
-                        if(!Directory.Exists(dir))
+                        if (!Directory.Exists(dir))
                             Directory.CreateDirectory(dir);
                     }
-                    catch(Exception)
+                    catch (Exception)
                     {
                         throw new AuthenticationException("Directory for cache can not be created, " +
                             "remove attribute CacheDir in BrowserAuthenticator tag in configuration file!");
@@ -153,9 +153,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
             }
             else
             {
-                if(string.IsNullOrEmpty(response?.ErrorMessage))
+                if (string.IsNullOrEmpty(response?.ErrorMessage))
                     throw new AuthenticationException("OAuth: Authentication using YandexAuthBrowser is failed!");
-                
+
                 throw new AuthenticationException(
                     string.Concat(
                         "OAuth: Authentication using YandexAuthBrowser is failed! ",
@@ -211,12 +211,12 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
         private static string GetNameOnly(string value)
         {
-            if(string.IsNullOrEmpty(value))
+            if (string.IsNullOrEmpty(value))
                 return value;
             int pos = value.IndexOf('@');
-            if(pos==0)
+            if (pos == 0)
                 return "";
-            if(pos>0)
+            if (pos > 0)
                 return value.Substring(0, pos);
             return value;
         }
@@ -231,7 +231,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                 ? _settings.CloudSettings.BrowserAuthenticatorPassword
                 : Password;
 
-            if(string.IsNullOrEmpty(url))
+            if (string.IsNullOrEmpty(url))
             {
                 throw new Exception("Ошибка! " +
                     "Для работы с Яндекс.Диском запустите сервер аутентификации и задайте в параметре YandexAuthenticationUrl его настройки!");
