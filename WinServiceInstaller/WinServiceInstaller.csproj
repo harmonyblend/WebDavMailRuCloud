@@ -8,8 +8,8 @@
     <TargetFrameworks>$(CommonTargetFrameworks)</TargetFrameworks>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <PackageId></PackageId>
-    <AssemblyVersion>1.10.0.5</AssemblyVersion>
-    <FileVersion>1.10.0.5</FileVersion>
+    <AssemblyVersion>$(ReleaseVersion)</AssemblyVersion>
+    <FileVersion>$(ReleaseVersion)</FileVersion>
     <AssemblyName>WinServiceInstaller</AssemblyName>
     <RootNamespace>WinServiceInstaller</RootNamespace>
     <StartupObject></StartupObject>
