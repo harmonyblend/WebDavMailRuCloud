@@ -164,7 +164,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
 	            if (item is FsFolder fsFolder)
 	            {
 		            lastFolder = fsFolder;
-		            fsFolder.IsChildsLoaded = lvl < Depth;
+		            fsFolder.IsChildrenLoaded = lvl < Depth;
 	            }
 
                 parseOp = (ParseOp)data.ReadShort();

@@ -135,7 +135,7 @@ namespace YaR.Clouds.Base
         }
 
         /// <summary>
-        /// List of phisical files contains data
+        /// List of physical files contains data
         /// </summary>
         public virtual List<File> Parts => new() {this};
         public virtual IList<File> Files => new List<File> { this };

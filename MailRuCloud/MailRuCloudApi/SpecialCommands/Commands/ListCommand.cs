@@ -57,7 +57,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                     .Select(it => it switch
                     {
                         File => it,
-                        Folder ifolder => ifolder.IsChildsLoaded
+                        Folder ifolder => ifolder.IsChildrenLoaded
                             ? ifolder
                             : Cloud.Account.RequestRepo.FolderInfo(RemotePath.Get(it.FullPath, lm).Result, depth: 3).Result,
                         _ => throw new NotImplementedException("Unknown item type")

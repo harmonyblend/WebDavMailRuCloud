@@ -111,7 +111,7 @@ namespace YaR.Clouds.Base
 
         public bool IsFile => false;
 
-		public bool IsChildsLoaded { get; internal set; }
+		public bool IsChildrenLoaded { get; internal set; }
 
 
         public int? ServerFoldersCount { get; set; }
@@ -126,7 +126,7 @@ namespace YaR.Clouds.Base
         }
 
 
-	    //public List<KeyValuePair<string, IEntry>> GetLinearChilds()
+	    //public List<KeyValuePair<string, IEntry>> GetLinearChildren()
 	    //{
 		    
 	    //}

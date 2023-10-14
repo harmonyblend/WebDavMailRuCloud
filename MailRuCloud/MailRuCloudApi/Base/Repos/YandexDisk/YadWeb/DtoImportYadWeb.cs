@@ -33,7 +33,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             var fi = data.Resources;
 
-            var res = new Folder(resStats?.Size ?? itemInfo?.Meta?.Size ?? 0, path) { IsChildsLoaded = true };
+            var res = new Folder(resStats?.Size ?? itemInfo?.Meta?.Size ?? 0, path) { IsChildrenLoaded = true };
             if (!string.IsNullOrEmpty(itemInfo?.Meta?.UrlShort))
                 res.PublicLinks.Add(new PublicLinkInfo("short", itemInfo.Meta.UrlShort));
 
@@ -89,7 +89,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             var path = resource.Path.Remove(0, "/disk".Length); 
 
-            var res = new Folder(path) { IsChildsLoaded = false };
+            var res = new Folder(path) { IsChildrenLoaded = false };
 
             return res;
         }

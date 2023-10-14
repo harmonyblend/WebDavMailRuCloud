@@ -19,6 +19,6 @@
             Size = size;
         }
 
-	    public bool IsChildsLoaded { get; set; }
+	    public bool IsChildrenLoaded { get; set; }
     }
 }

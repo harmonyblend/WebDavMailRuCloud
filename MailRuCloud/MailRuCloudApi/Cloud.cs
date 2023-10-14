@@ -151,7 +151,7 @@ namespace YaR.Clouds
 
         private void FillWithULinks(Folder folder)
         {
-            if (!folder.IsChildsLoaded) return;
+            if (!folder.IsChildrenLoaded) return;
 
             if (LinkManager != null)
             {
@@ -190,7 +190,7 @@ namespace YaR.Clouds
                 case File cfile:
                     _itemCache.Add(cfile.FullPath, cfile);
                     break;
-                case Folder { IsChildsLoaded: true } cfolder:
+                case Folder { IsChildrenLoaded: true } cfolder:
                 {
                     _itemCache.Add(cfolder.FullPath, cfolder);
                     _itemCache.Add(cfolder.Files.Select(f => new KeyValuePair<string, IEntry>(f.FullPath, f)));
@@ -382,7 +382,7 @@ namespace YaR.Clouds
             //clone all inner links
             if (LinkManager != null)
             {
-                var links = LinkManager.GetChilds(folder.FullPath);
+                var links = LinkManager.GetChildren(folder.FullPath);
                 if (links != null)
                 {
                     foreach (var linka in links)
@@ -644,7 +644,7 @@ namespace YaR.Clouds
             //clone all inner links
             if (LinkManager != null)
             {
-                var links = LinkManager.GetChilds(folder.FullPath).ToList();
+                var links = LinkManager.GetChildren(folder.FullPath).ToList();
                 foreach (var linka in links)
                 {
                     // некоторые клиенты сначала делают структуру каталогов, а потом по одному переносят файлы
@@ -814,7 +814,7 @@ namespace YaR.Clouds
             //remove inner links
             if (LinkManager != null)
             {
-                var innerLinks = LinkManager.GetChilds(fullPath);
+                var innerLinks = LinkManager.GetChildren(fullPath);
                 LinkManager.RemoveLinks(innerLinks);
             }
 

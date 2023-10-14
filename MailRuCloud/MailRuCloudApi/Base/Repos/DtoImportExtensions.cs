@@ -63,7 +63,7 @@ namespace YaR.Clouds.Base.Repos
 
         internal static Folder ToFolder(this FsFolder data)
 		{
-			var res = new Folder((long)data.Size, data.FullPath) { IsChildsLoaded = data.IsChildsLoaded };
+			var res = new Folder((long)data.Size, data.FullPath) { IsChildrenLoaded = data.IsChildrenLoaded };
 
 			res.Files.AddRange(data.Items
 				.OfType<FsFile>()

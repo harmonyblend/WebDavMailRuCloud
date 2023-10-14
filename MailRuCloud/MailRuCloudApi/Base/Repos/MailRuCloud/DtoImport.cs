@@ -236,7 +236,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
                     .Select(item => item.ToFile(publicBaseUrl, ""))
                     .ToGroupedFiles()
                     .ToList(),
-                IsChildsLoaded = true
+                IsChildrenLoaded = true
             };
 
             return folder;

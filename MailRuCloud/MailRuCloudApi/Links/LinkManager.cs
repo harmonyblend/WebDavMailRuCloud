@@ -289,7 +289,7 @@ namespace YaR.Clouds.Links
             }
         }
 
-        //public IEnumerable<ItemLink> GetChilds(string folderFullPath, bool doResolveType)
+        //public IEnumerable<ItemLink> GetChildren(string folderFullPath, bool doResolveType)
         //{
         //    var lst = _itemList.Items
         //        .Where(it => 
@@ -298,7 +298,7 @@ namespace YaR.Clouds.Links
         //    return lst;
         //}
 
-        public IEnumerable<Link> GetChilds(string folderFullPath)
+        public IEnumerable<Link> GetChildren(string folderFullPath)
         {
             var lst = _itemList.Items
                 .Where(it => WebDavPath.IsParentOrSame(folderFullPath, it.MapTo))
