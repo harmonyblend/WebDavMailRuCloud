@@ -187,7 +187,7 @@ namespace NWebDav.Server
                                                      )
                 {
                     // If client didn't wait for operation completion, just do nothing
-                    //s_log.Log(LogLevel.Error, $"Client disconnected. Error while handling request (method={request.HttpMethod}, url={request.Url} {httpContext.Response.StatusDescription}");
+                    s_log.Log(LogLevel.Debug, $"Client disconnected. Error while handling request (method={request.HttpMethod}, url={request.Url} {httpContext.Response.StatusDescription}");
                 }
 
                 catch (Exception exc)
