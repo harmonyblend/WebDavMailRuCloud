@@ -41,13 +41,16 @@ namespace YaR.Clouds.Base.Requests
             request.ContentType = ConstSettings.DefaultRequestType;
             request.Accept = "application/json";
             request.UserAgent = Settings.UserAgent;
+            request.ContinueTimeout = Settings.CloudSettings.Wait100ContinueTimeoutMs;
+            request.Timeout = Settings.CloudSettings.WaitResponseTimeoutMs;
+            request.ReadWriteTimeout = Settings.CloudSettings.ReadWriteTimeoutMs;
 
 
-            #if NET48
+#if NET48
             request.AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip;
-            #else
+#else
             request.AutomaticDecompression = DecompressionMethods.All;
-            #endif
+#endif
 
             //request.AllowReadStreamBuffering = true;
             

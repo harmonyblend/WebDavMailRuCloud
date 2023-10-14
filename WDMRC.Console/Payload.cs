@@ -61,6 +61,10 @@ namespace YaR.Clouds.Console
 
                 DisableLinkManager = options.DisableLinkManager,
 
+                Wait100ContinueTimeoutMs = options.Wait100ContinueTimeoutMs,
+                WaitResponseTimeoutMs = options.WaitResponseTimeoutMs,
+                ReadWriteTimeoutMs = options.ReadWriteTimeoutMs,
+
                 BrowserAuthenticatorUrl = Config.BrowserAuthenticator?.Url,
                 BrowserAuthenticatorPassword = Config.BrowserAuthenticator?.Password,
                 BrowserAuthenticatorCacheDir = Config.BrowserAuthenticator?.CacheDir,
