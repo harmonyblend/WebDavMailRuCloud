@@ -216,13 +216,7 @@ namespace YaR.Clouds
         public IEnumerable<File> IsFileExists(string filename, IList<string> folderPaths)
         {
             if (folderPaths == null)
-            {
-#if DEBUG
-                // This case should not be happened, let's find out why we are here.
-                System.Diagnostics.Debugger.Break();
-#endif
                 return Enumerable.Empty<File>();
-            }
 
             var folder = folderPaths
                 .AsParallel()
@@ -230,13 +224,7 @@ namespace YaR.Clouds
                 .Select(async path => (Folder)await GetItemAsync(path, ItemType.Folder, false));
 
             if (folder == null)
-            {
-#if DEBUG
-                // This case should not be happened, let's find out why we are here.
-                System.Diagnostics.Debugger.Break();
-#endif
                 return Enumerable.Empty<File>();
-            }
 
             var files = folder
                 .SelectMany(fld => (fld.Result?.Files ?? new List<File>()).Where(file => WebDavPath.PathEquals(file.Name, filename)));
