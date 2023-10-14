@@ -96,7 +96,10 @@ namespace YaR.Clouds.Base.Streams
         {
             using var httpweb = _responseGenerator(start, end, file);
             using var responseStream = httpweb.Value.GetResponseStream();
-            await responseStream.CopyToAsync(_innerStream, 81920, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await responseStream.CopyToAsync(_innerStream,
+                /* 81920 is default buffer size in .NET */
+                16384 /* lets try to align to TCP window */,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
         protected override void Dispose(bool disposing)

@@ -25,14 +25,23 @@ namespace NWebDav.Server.HttpListener
 
         public Task CloseAsync()
         {
-            try
+            if (_response != null)
             {
-                // Prevent error of closing stream before all bytes are rent
-                _response?.OutputStream?.Flush();
-            } catch { }
+                // Prevent any exceptions
+                try
+                {
+                    // At first send remaining buffered byte to client
+                    _response.OutputStream?.Flush();
+                }
+                catch { }
 
-            // Close the response
-            _response?.Close();
+                try
+                {
+                    // Then close the response
+                    _response.Close();
+                }
+                catch { }
+            }
 
             // Command completed synchronous
             return Task.FromResult(true);
