@@ -72,10 +72,13 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
             {
                 Logger.Debug(text);
             }
-            if (msg.Result.Version != "315.2.0")
+            if (_postData.Models != null &&
+                _postData.Models.Count > 0 &&
+                _postData.Models[0].Name == "space")
             {
-                Logger.Warn($"Yandex has new API version {msg.Result.Version}");
+                Logger.Warn($"Yandex has API version {msg.Result.Version}");
             }
+
             return msg;
         }
     }
