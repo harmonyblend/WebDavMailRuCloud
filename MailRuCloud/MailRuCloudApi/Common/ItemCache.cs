@@ -10,6 +10,20 @@ namespace YaR.Clouds.Common
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(ItemCache<TKey, TValue>));
 
+        private static readonly TimeSpan _minCleanUpInterval = new TimeSpan(0, 0, 20 /* секунды */ );
+        private static readonly TimeSpan _maxCleanUpInterval = new TimeSpan(0, 10 /* минуты */, 0);
+
+        // По умолчанию очистка кеша от устаревших записей производится каждые 5 минут
+        private TimeSpan _cleanUpPeriod = TimeSpan.FromMinutes(5);
+
+        private readonly TimeSpan _expirePeriod;
+
+        private readonly bool _noCache;
+
+        private readonly Timer _cleanTimer;
+        private readonly ConcurrentDictionary<TKey, TimedItem<TValue>> _items = new();
+        //private readonly object _locker = new object();
+
         public ItemCache(TimeSpan expirePeriod)
         {
             _expirePeriod = expirePeriod;
@@ -18,22 +32,21 @@ namespace YaR.Clouds.Common
             long cleanPeriod = (long)CleanUpPeriod.TotalMilliseconds;
 
             // if there is no cache, we don't need clean up timer
-            _cleanTimer = _noCache? null : new Timer(_ => RemoveExpired(), null, cleanPeriod, cleanPeriod);
+            _cleanTimer = _noCache ? null : new Timer(_ => RemoveExpired(), null, cleanPeriod, cleanPeriod);
         }
-
-        private readonly bool _noCache;
-
-        private readonly Timer _cleanTimer;
-        private readonly ConcurrentDictionary<TKey, TimedItem<TValue>> _items = new();
-        //private readonly object _locker = new object();
 
         public TimeSpan CleanUpPeriod
         {
             get => _cleanUpPeriod;
             set
             {
-                // Clean up period should not be shorter then cache expiration period
-                _cleanUpPeriod = value < _expirePeriod ? value : _expirePeriod;
+                // Очистку кеша от устаревших записей не следует проводить часто чтобы не нагружать машину,
+                // и не следует проводить редко, редко, чтобы не натыкаться постоянно на устаревшие записи.
+                _cleanUpPeriod = value < _minCleanUpInterval
+                                 ? _minCleanUpInterval
+                                 : value > _maxCleanUpInterval
+                                   ? _maxCleanUpInterval
+                                   : value;
 
                 if (!_noCache)
                 {
@@ -47,10 +60,11 @@ namespace YaR.Clouds.Common
         {
             if (!_items.Any()) return 0;
 
+            DateTime threshold = DateTime.Now - _expirePeriod;
             int removedCount = 0;
             foreach (var item in _items)
-                if (DateTime.Now - item.Value.Created > TimeSpan.FromMinutes(5))
-                    if (_items.TryRemove(item.Key, out _)) 
+                if (item.Value.Created <= threshold)
+                    if (_items.TryRemove(item.Key, out _))
                         removedCount++;
 
             if (removedCount > 0)
@@ -64,7 +78,7 @@ namespace YaR.Clouds.Common
             if (_noCache)
                 return default;
 
-            if (!_items.TryGetValue(key, out var item)) 
+            if (!_items.TryGetValue(key, out var item))
                 return default;
 
             if (IsExpired(item))
@@ -128,19 +142,15 @@ namespace YaR.Clouds.Common
 
         private bool IsExpired(TimedItem<TValue> item)
         {
-            return DateTime.Now - item.Created > _expirePeriod;
+            DateTime threshold = DateTime.Now - _expirePeriod;
+            return item.Created <= threshold;
         }
-
-        private readonly TimeSpan _expirePeriod;
-        private TimeSpan _cleanUpPeriod = TimeSpan.FromMinutes(5);
 
         private class TimedItem<T>
         {
             public DateTime Created { get; set; }
             public T Item { get; set; }
         }
-
-
     }
 
     public interface ICanForget
