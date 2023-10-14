@@ -68,13 +68,13 @@ namespace YaR.Clouds.Base.Requests
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            var httprequest = CreateRequest();
+            var httpRequest = CreateRequest();
 
             var content = CreateHttpContent();
             if (content != null)
             {
-                httprequest.Method = "POST";
-                var stream = httprequest.GetRequestStream();
+                httpRequest.Method = "POST";
+                var stream = httpRequest.GetRequestStream();
                 /*
                  * For debug add to Watch:
                  *      System.Text.Encoding.UTF8.GetString(content)
@@ -83,7 +83,7 @@ namespace YaR.Clouds.Base.Requests
             }
             try
             {
-                using var response = (HttpWebResponse)await httprequest.GetResponseAsync();
+                using var response = (HttpWebResponse)await httpRequest.GetResponseAsync();
 
                 if ((int) response.StatusCode >= 500)
                     throw new RequestException("Server fault")
@@ -128,7 +128,7 @@ namespace YaR.Clouds.Base.Requests
             finally
             {
                 watch.Stop();
-                Logger.Debug($"HTTP:{httprequest.Method}:{httprequest.RequestUri.AbsoluteUri} ({watch.Elapsed.Milliseconds} ms)");
+                Logger.Debug($"HTTP:{httpRequest.Method}:{httpRequest.RequestUri.AbsoluteUri} ({watch.Elapsed.Milliseconds} ms)");
             }
 
 

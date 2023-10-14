@@ -23,15 +23,16 @@ namespace YaR.Clouds.Base
 
         }
 
-        public static string Clean(string path, bool doAddFinalseparator = false)
+        public static string Clean(string path, bool doAddFinalSeparator = false)
         {
             try
             {
-                string res = path.Replace("\\", "/");
-                res = res.Replace("//", "/");
-                if (res.Length > 1 && !doAddFinalseparator)                
+                string res = path?.Replace("\\", "/").Replace("//", "/")
+                    ?? throw new ArgumentNullException(nameof(path));
+                if (res.Length > 1 && !doAddFinalSeparator)                
                     return res.TrimEnd('/');
-                if (doAddFinalseparator && !res.EndsWith("/")) res += Separator;
+                if (doAddFinalSeparator && !res.EndsWith("/"))
+                    res += Separator;
                 return res;
             }
             catch (Exception e)
