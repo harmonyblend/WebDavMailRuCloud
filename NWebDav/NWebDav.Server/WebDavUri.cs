@@ -47,7 +47,7 @@ namespace NWebDav.Server
         }  //_fakeurl.Scheme;
 
         /// <summary>
-        /// Decoded path (standart decode, may fail)
+        /// Decoded path (standard decode, may fail)
         /// </summary>
         public string LocalPath => Path; //_fakeurl.LocalPath;
 
