@@ -28,8 +28,8 @@ namespace YaR.Clouds.Base.Requests
         {
             string domain = string.IsNullOrEmpty(baseDomain) ? ConstSettings.CloudDomain : baseDomain;
             var uriz = new Uri(new Uri(domain), RelationalUri);
-            
-            // supressing escaping is obsolete and breaks, for example, chinese names
+
+            // suppressing escaping is obsolete and breaks, for example, Chinese names
             // url generated for %E2%80%8E and %E2%80%8F seems ok, but mail.ru replies error
             // https://stackoverflow.com/questions/20211496/uri-ignore-special-characters
             //var udriz = new Uri(new Uri(domain), RelationalUri, true);
@@ -53,7 +53,7 @@ namespace YaR.Clouds.Base.Requests
 #endif
 
             //request.AllowReadStreamBuffering = true;
-            
+
             return request;
         }
 
@@ -74,38 +74,43 @@ namespace YaR.Clouds.Base.Requests
             if (content != null)
             {
                 httpRequest.Method = "POST";
-                var stream = httpRequest.GetRequestStream();
+                httpRequest.AllowWriteStreamBuffering = false;
+                using Stream requestStream = await httpRequest.GetRequestStreamAsync().ConfigureAwait(false);
                 /*
-                 * For debug add to Watch:
+                 * The debug add the following to a watch list:
                  *      System.Text.Encoding.UTF8.GetString(content)
                  */
-                await stream.WriteAsync(content, 0, content.Length);
+#if NET48
+                await requestStream.WriteAsync(content, 0, content.Length).ConfigureAwait(false);
+#else
+                await requestStream.WriteAsync(content).ConfigureAwait(false);
+#endif
+                await requestStream.FlushAsync().ConfigureAwait(false);
+                requestStream.Close();
             }
             try
             {
-                using var response = (HttpWebResponse)await httpRequest.GetResponseAsync();
+                using var response = (HttpWebResponse)await httpRequest.GetResponseAsync().ConfigureAwait(false);
 
-                if ((int) response.StatusCode >= 500)
+                if ((int)response.StatusCode >= 500)
+                {
                     throw new RequestException("Server fault")
                     {
                         StatusCode = response.StatusCode
                     };
+                }
 
                 RequestResponse<T> result;
-#if NET48
                 using (var responseStream = response.GetResponseStream())
-#else
-                await using (var responseStream = response.GetResponseStream())
-#endif
-
                 {
                     result = DeserializeMessage(response.Headers, Transport(responseStream));
+                    responseStream.Close();
                 }
 
                 if (!result.Ok || response.StatusCode != HttpStatusCode.OK)
                 {
                     var exceptionMessage =
-                        $"Request failed (status code {(int) response.StatusCode}): {result.Description}";
+                        $"Request failed (status code {(int)response.StatusCode}): {result.Description}";
                     throw new RequestException(exceptionMessage)
                     {
                         StatusCode = response.StatusCode,
@@ -119,9 +124,9 @@ namespace YaR.Clouds.Base.Requests
                 return retVal;
             }
             // ReSharper disable once RedundantCatchClause
-            #pragma warning disable 168
+#pragma warning disable 168
             catch (Exception ex)
-            #pragma warning restore 168
+#pragma warning restore 168
             {
                 throw;
             }
@@ -130,8 +135,6 @@ namespace YaR.Clouds.Base.Requests
                 watch.Stop();
                 Logger.Debug($"HTTP:{httpRequest.Method}:{httpRequest.RequestUri.AbsoluteUri} ({watch.Elapsed.Milliseconds} ms)");
             }
-
-
         }
 
         protected abstract TConvert Transport(Stream stream);
