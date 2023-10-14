@@ -156,12 +156,14 @@ namespace YaR.Clouds.Base
             FullPath = WebDavPath.Combine(Path, destinationName);
             if (ServiceInfo != null) ServiceInfo.CleanName = Name;
 
-            if (Files.Count <= 1) 
+            if (Files.Count <= 1)
                 return;
 
             string path = Path;
             foreach (var fiFile in Parts)
-                fiFile.FullPath = WebDavPath.Combine(path, destinationName + fiFile.ServiceInfo.ToString(false)); //TODO: refact
+                fiFile.FullPath = WebDavPath.Combine(
+                    path,
+                    string.Concat(destinationName, fiFile.ServiceInfo.ToString(false))); //TODO: refact
         }
 
         //TODO : refact, bad design
