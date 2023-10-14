@@ -59,11 +59,15 @@ namespace YaR.Clouds
             Account = new Account(settings, credentials);
             if (!Account.Login())
             {
-                throw new AuthenticationException("Auth token has't been retrieved.");
+                throw new AuthenticationException("Auth token hasn't been retrieved.");
             }
 
             //TODO: wow very dummy linking, refact cache realization globally!
-            _itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(settings.CacheListingSec)) { CleanUpPeriod = TimeSpan.FromMinutes(5) };
+            _itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(settings.CacheListingSec));
+            //{
+            //    Полагаемся на стандартно заданное время очистки
+            //    CleanUpPeriod = TimeSpan.FromMinutes(5)
+            //};
             LinkManager = settings.DisableLinkManager ? null : new LinkManager(this);
         }
 
@@ -202,16 +206,10 @@ namespace YaR.Clouds
             }
         }
 
-        private IEntry CacheGetEntry(string path)
-        {
-            var cached = _itemCache.Get(path);
-            return cached;
-        }
+        private IEntry CacheGetEntry(string path) => _itemCache.Get(path);
 
         public virtual IEntry GetItem(string path, ItemType itemType = ItemType.Unknown, bool resolveLinks = true)
-        {
-            return GetItemAsync(path, itemType, resolveLinks).Result;
-        }
+            => GetItemAsync(path, itemType, resolveLinks).Result;
 
         public IEnumerable<File> IsFileExists(string filename, IList<string> folderPaths)
         {
@@ -243,7 +241,7 @@ namespace YaR.Clouds
             return res.IsSuccess;
         }
 
-        public async Task  Unpublish(File file)
+        public async Task Unpublish(File file)
         {
             foreach (var innerFile in file.Files)
             {
@@ -958,9 +956,12 @@ namespace YaR.Clouds
             }
             catch (Exception e)
                 when (  // let's check if there really no file or just other network error
-                    (e is AggregateException && e.InnerException is WebException we && (we.Response as HttpWebResponse)?.StatusCode == HttpStatusCode.NotFound)
+                    (e is AggregateException &&
+                     e.InnerException is WebException we &&
+                     we.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound })
                     ||
-                    (e is WebException wee && (wee.Response as HttpWebResponse)?.StatusCode == HttpStatusCode.NotFound)
+                    (e is WebException wee &&
+                     wee.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound })
                 )
             {
                 return null;
