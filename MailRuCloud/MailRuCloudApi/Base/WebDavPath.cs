@@ -103,17 +103,21 @@ namespace YaR.Clouds.Base
             return res;
         }
 
-        public static IEnumerable<string> GetParents(string path, bool includeSelf = true)
+        public static List<string> GetParents(string path, bool includeSelf = true)
         {
+            List<string> result = new List<string>();
+
             path = Clean(path);
             if (includeSelf)
-                yield return path;
+                result.Add(path);
 
             while (path != Root)
             {
                 path = Parent(path);
-                yield return path;
-            } 
+                result.Add(path);
+            }
+
+            return result;
         }
 
         public static string ModifyParent(string path, string oldParent, string newParent)
@@ -137,7 +141,7 @@ namespace YaR.Clouds.Base
         public static string EscapeDataString(string path)
         {
             return Uri
-                .EscapeDataString(path)
+                .EscapeDataString(path ?? string.Empty)
                 .Replace("#", "%23");
         }
     }

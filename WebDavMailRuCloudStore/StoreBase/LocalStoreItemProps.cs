@@ -130,9 +130,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
                 },
                 new DavSharedLink<T>
                 {
-                    Getter = (_, item) => !item.FileInfo.PublicLinks.Any() 
-                        ? string.Empty
-                        : item.FileInfo.PublicLinks.First().Uri.OriginalString,
+                    Getter = (_, item) => item.FileInfo.PublicLinks.Values.FirstOrDefault()?.Uri.OriginalString ?? string.Empty,
                     Setter = (_, _, _) => DavStatusCode.Ok
                 }
             };

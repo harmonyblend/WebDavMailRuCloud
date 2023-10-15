@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Authentication;
+using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.Types;
 using YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models;
 using YaR.Clouds.Base.Requests.Types;
 
@@ -31,7 +34,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
             return res;
         }
 
-
         public static IEntry ToFolder(this YadFolderInfoRequestData data,
             YadItemInfoRequestData itemInfo, YadResourceStatsRequestData resStats, string path)
         {
@@ -39,18 +41,25 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
             var res = new Folder(resStats?.Size ?? itemInfo?.Meta?.Size ?? 0, path) { IsChildrenLoaded = true };
             if (!string.IsNullOrEmpty(itemInfo?.Meta?.UrlShort))
-                res.PublicLinks.Add(new PublicLinkInfo("short", itemInfo.Meta.UrlShort));
-
-            res.Files.AddRange(fi
-                .Where(it => it.Type == "file")
-                .Select(f => f.ToFile())
-                .ToGroupedFiles()
-            );
-
-            foreach (var it in fi.Where(it => it.Type == "dir"))
             {
-                res.Folders.Add(it.ToFolder());
+                PublicLinkInfo item = new PublicLinkInfo("short", itemInfo.Meta.UrlShort);
+                res.PublicLinks.TryAdd(item.Uri.AbsoluteUri, item);
             }
+
+            res.Files = new ConcurrentDictionary<string, File>(
+                fi
+                    .Where(it => it.Type == "file")
+                    .Select(f => f.ToFile())
+                    .ToGroupedFiles()
+                    .Select(item => new KeyValuePair<string, File>(item.FullPath, item)),
+                StringComparer.InvariantCultureIgnoreCase);
+
+            res.Folders = new ConcurrentDictionary<string, Folder>(
+               fi
+                    .Where(it => it.Type == "dir")
+                    .Select(f => f.ToFolder())
+                    .Select(item => new KeyValuePair<string, Folder>(item.FullPath, item)),
+                StringComparer.InvariantCultureIgnoreCase);
 
             return res;
         }
@@ -66,7 +75,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                 LastWriteTimeUtc = UnixTimeStampToDateTime(data.Mtime, DateTime.MinValue)
             };
             if (!string.IsNullOrEmpty(data.Meta.UrlShort))
-                res.PublicLinks.Add(new PublicLinkInfo("short", data.Meta.UrlShort));
+            {
+                PublicLinkInfo item = new PublicLinkInfo("short", data.Meta.UrlShort);
+                res.PublicLinks.TryAdd(item.Uri.AbsoluteUri, item);
+            }
             return res;
         }
 
@@ -84,8 +96,11 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                 //    : data.Meta.UrlShort
             };
             if (!string.IsNullOrEmpty(data.Meta.UrlShort))
-                res.PublicLinks.Add(new PublicLinkInfo("short", data.Meta.UrlShort));
-            
+            {
+                PublicLinkInfo item = new PublicLinkInfo("short", data.Meta.UrlShort);
+                res.PublicLinks.TryAdd(item.Uri.AbsoluteUri, item);
+            }
+
             return res;
         }
 

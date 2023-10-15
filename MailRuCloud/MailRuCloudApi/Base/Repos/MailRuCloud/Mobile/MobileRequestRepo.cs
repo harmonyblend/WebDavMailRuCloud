@@ -154,13 +154,13 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
                                     CreationTimeUtc = fsfi.ModifDate,
                                     LastWriteTimeUtc = fsfi.ModifDate
                                 };
-                                f.Files.Add(fi);
+                                f.Files.TryAdd(fi.FullPath, fi);
                                 break;
                             }
                             case FsFolder fsfo:
                             {
                                 var fo = new Folder(fsfo.Size == null ? 0 : (long) fsfo.Size.Value, fsfo.FullPath);
-                                f.Folders.Add(fo);
+                                f.Folders.TryAdd(fo.FullPath, fo);
                                 break;
                             }
                             default:

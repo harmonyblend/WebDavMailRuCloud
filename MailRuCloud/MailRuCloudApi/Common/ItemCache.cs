@@ -58,7 +58,7 @@ namespace YaR.Clouds.Common
 
         public int RemoveExpired()
         {
-            if (!_items.Any()) return 0;
+            if (_items.IsEmpty) return 0;
 
             DateTime threshold = DateTime.Now - _expirePeriod;
             int removedCount = 0;

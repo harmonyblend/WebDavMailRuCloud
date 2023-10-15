@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 
 namespace YaR.Clouds.Base
 {
@@ -10,6 +10,6 @@ namespace YaR.Clouds.Base
         string Name { get; }
         string FullPath { get; }
         DateTime CreationTimeUtc { get; }
-        List<PublicLinkInfo> PublicLinks { get; }
+        ConcurrentDictionary<string, PublicLinkInfo> PublicLinks { get; }
     }
 }

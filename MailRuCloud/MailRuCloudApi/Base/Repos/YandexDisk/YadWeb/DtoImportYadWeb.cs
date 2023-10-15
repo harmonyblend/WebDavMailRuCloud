@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models;
 using YaR.Clouds.Base.Requests.Types;
@@ -28,25 +30,32 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             return res;
         }
 
-
-        public static IEntry ToFolder(this YadFolderInfoRequestData data, YadItemInfoRequestData itemInfo, YadResourceStatsRequestData resStats, string path, string publicBaseUrl)
+        public static IEntry ToFolder(this YadFolderInfoRequestData data,
+            YadItemInfoRequestData itemInfo, YadResourceStatsRequestData resStats, string path, string publicBaseUrl)
         {
             var fi = data.Resources;
 
             var res = new Folder(resStats?.Size ?? itemInfo?.Meta?.Size ?? 0, path) { IsChildrenLoaded = true };
             if (!string.IsNullOrEmpty(itemInfo?.Meta?.UrlShort))
-                res.PublicLinks.Add(new PublicLinkInfo("short", itemInfo.Meta.UrlShort));
-
-            res.Files.AddRange(fi
-                .Where(it => it.Type == "file")
-                .Select(f => f.ToFile(publicBaseUrl))
-                .ToGroupedFiles()
-            );
-
-            foreach (var it in fi.Where(it => it.Type == "dir"))
             {
-                res.Folders.Add(it.ToFolder());
+                PublicLinkInfo item = new PublicLinkInfo("short", itemInfo.Meta.UrlShort);
+                res.PublicLinks.TryAdd(item.Uri.AbsoluteUri, item);
             }
+
+            res.Files = new ConcurrentDictionary<string, File>(
+                fi
+                    .Where(it => it.Type == "file")
+                    .Select(f => f.ToFile(publicBaseUrl))
+                    .ToGroupedFiles()
+                    .Select(item => new KeyValuePair<string, File>(item.FullPath, item)),
+                StringComparer.InvariantCultureIgnoreCase);
+
+            res.Folders = new ConcurrentDictionary<string, Folder>(
+               fi
+                    .Where(it => it.Type == "dir")
+                    .Select(f => f.ToFolder())
+                    .Select(item => new KeyValuePair<string, Folder>(item.FullPath, item)),
+                StringComparer.InvariantCultureIgnoreCase);
 
             return res;
         }
@@ -62,7 +71,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 LastWriteTimeUtc = UnixTimeStampToDateTime(data.Mtime, DateTime.MinValue)
             };
             if (!string.IsNullOrEmpty(data.Meta.UrlShort))
-                res.PublicLinks.Add(new PublicLinkInfo("short", data.Meta.UrlShort));
+            {
+                PublicLinkInfo item = new PublicLinkInfo("short", data.Meta.UrlShort);
+                res.PublicLinks.TryAdd(item.Uri.AbsoluteUri, item);
+            }
             return res;
         }
 
@@ -80,8 +92,11 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 //    : data.Meta.UrlShort
             };
             if (!string.IsNullOrEmpty(data.Meta.UrlShort))
-                res.PublicLinks.Add(new PublicLinkInfo("short", data.Meta.UrlShort));
-            
+            {
+                PublicLinkInfo item = new PublicLinkInfo("short", data.Meta.UrlShort);
+                res.PublicLinks.TryAdd(item.Uri.AbsoluteUri, item);
+            }
+
             return res;
         }
 
@@ -207,7 +222,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             {
                 // Unix timestamp is seconds past epoch
                 var dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-                dtDateTime = dtDateTime.AddSeconds(unixTimeStamp); //.ToLocalTime(); - doesn't need, clients usially convert to localtime by itself
+                dtDateTime = dtDateTime.AddSeconds(unixTimeStamp); //.ToLocalTime(); - doesn't need, clients usually convert to localtime by itself
                 return dtDateTime;
             }
             catch (Exception e)

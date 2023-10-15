@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using YaR.Clouds.Base;
 using YaR.Clouds.Links.Dto;
@@ -11,7 +11,7 @@ namespace YaR.Clouds.Links
     {
         public Link(Uri href, Cloud.ItemType itemType = Cloud.ItemType.Unknown)
         {
-            Href = href.IsAbsoluteUri ? href : throw new ArgumentException("Absolute uri required");
+            Href = href.IsAbsoluteUri ? href : throw new ArgumentException("Absolute URI required");
             IsLinkedToFileSystem = false;
             ItemType = itemType;
         }
@@ -70,7 +70,16 @@ namespace YaR.Clouds.Links
 
 
         public Uri Href { get; }
-        public List<PublicLinkInfo> PublicLinks => new() {new PublicLinkInfo("linked", Href) };
+        //public List<PublicLinkInfo> PublicLinks => new() {new PublicLinkInfo("linked", Href) };
+        public ConcurrentDictionary<string, PublicLinkInfo> PublicLinks
+        {
+            get
+            {
+                ConcurrentDictionary<string, PublicLinkInfo> result = new(StringComparer.InvariantCultureIgnoreCase);
+                result.TryAdd(Href.AbsoluteUri, new PublicLinkInfo("linked", Href));
+                return result;
+            }
+        }
 
 
         public FileAttributes Attributes => FileAttributes.Normal; //TODO: dunno what to do

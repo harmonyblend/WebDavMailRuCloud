@@ -27,16 +27,17 @@ namespace YaR.Clouds.Streams
 
             Stream stream;
 
-            bool cryptRequired = _cloud.IsFileExists(CryptFileInfo.FileName, WebDavPath.GetParents(folder.FullPath).ToList()).Any();
+            bool cryptRequired = _cloud.IsFileExists(CryptFileInfo.FileName, WebDavPath.GetParents(folder.FullPath));
             if (cryptRequired && !discardEncryption)
             {
                 if (!_cloud.Account.Credentials.CanCrypt)
                     throw new Exception($"Cannot upload {file.FullPath} to crypt folder without additional password!");
 
                 // #142 remove crypted file parts if size changed
-                var remoteFile = folder.Files.FirstOrDefault(f => f.FullPath == file.FullPath);
-                if (remoteFile != null)
+                if (folder.Files.TryGetValue(file.FullPath, out var remoteFile))
+                {
                     await _cloud.Remove(remoteFile);
+                }
                 
                 stream = GetCryptoStream(file, onUploaded);
             }

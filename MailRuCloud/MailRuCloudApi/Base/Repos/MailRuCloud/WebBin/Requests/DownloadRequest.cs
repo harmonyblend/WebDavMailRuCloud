@@ -16,19 +16,23 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin.Requests
 
         public HttpWebRequest Request { get; }
 
-        private static HttpWebRequest CreateRequest(HttpCommonSettings settings, IAuth authent, File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls) //(IAuth authent, IWebProxy proxy, string url, long instart, long inend,  string userAgent)
+        private static HttpWebRequest CreateRequest(HttpCommonSettings settings,
+            IAuth authent, File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls)
+            //(IAuth authent, IWebProxy proxy, string url, long instart, long inend,  string userAgent)
         {
-            bool isLinked = file.PublicLinks.Any();
+            bool isLinked = !file.PublicLinks.IsEmpty;
 
             string url;
 
             if (isLinked)
             {
-                var urii = file.PublicLinks.First().Uri;
-                var uriistr = urii.OriginalString;
-                var baseura = publicBaseUrls.First(pbu => uriistr.StartsWith(pbu, StringComparison.InvariantCulture));
+                var urii = file.PublicLinks.Values.FirstOrDefault()?.Uri;
+                var uriistr = urii?.OriginalString;
+                var baseura = uriistr == null
+                    ? null
+                    : publicBaseUrls.First(pbu => uriistr.StartsWith(pbu, StringComparison.InvariantCulture));
                 if (string.IsNullOrEmpty(baseura))
-                    throw new ArgumentException("url does not starts with base url");
+                    throw new ArgumentException("URL does not starts with base URL");
 
                 url = $"{downServerUrl}{WebDavPath.EscapeDataString(uriistr.Remove(0, baseura.Length))}";
             }

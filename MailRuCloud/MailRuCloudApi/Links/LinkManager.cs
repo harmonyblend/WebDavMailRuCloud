@@ -173,11 +173,12 @@ namespace YaR.Clouds.Links
                     itl.IsBad || 
                     _cloud.GetItemAsync(itl.MapPath, Cloud.ItemType.Folder, false).Result == null)
                 .ToList();
-            if (removes.Count == 0) return 0;
+            if (removes.Count == 0)
+                return 0;
 
             _itemList.Items.RemoveAll(it => removes.Any(rem => WebDavPath.PathEquals(rem.MapPath, it.MapTo) && rem.Name == it.Name));
 
-            if (!removes.Any()) 
+            if (removes.Count == 0) 
                 return 0;
 
             if (doWriteHistory)
@@ -198,7 +199,6 @@ namespace YaR.Clouds.Links
             }
             Save();
             return removes.Count;
-
         }
 
         ///// <summary>

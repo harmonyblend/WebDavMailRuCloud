@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -29,7 +30,8 @@ namespace YaR.Clouds.Base
         public File(string fullPath, long size, params PublicLinkInfo[] links) 
             : this(fullPath, size)
         {
-            PublicLinks.AddRange(links);
+            foreach (var link in links)
+                PublicLinks.AddOrUpdate(link.Uri.AbsolutePath, link, (_, _) => link);
         }
 
         private IFileHash _hash;
@@ -37,17 +39,18 @@ namespace YaR.Clouds.Base
         /// <summary>
         /// makes copy of this file with new path
         /// </summary>
-        /// <param name="newfullPath"></param>
+        /// <param name="newFullPath"></param>
         /// <returns></returns>
-        public virtual File New(string newfullPath)
+        public virtual File New(string newFullPath)
         {
-            var file =  new File(newfullPath, Size, Hash)
+            var file = new File(newFullPath, Size, Hash)
             {
                 CreationTimeUtc = CreationTimeUtc,
                 LastAccessTimeUtc = LastAccessTimeUtc,
                 LastWriteTimeUtc = LastWriteTimeUtc
             };
-            file.PublicLinks.AddRange(PublicLinks);
+            foreach (var linkPair in PublicLinks)
+                file.PublicLinks.AddOrUpdate(linkPair.Key, linkPair.Value, (_, _) => linkPair.Value);
 
             return file;
         }
@@ -123,15 +126,16 @@ namespace YaR.Clouds.Base
         /// Gets public file link.
         /// </summary>
         /// <value>Public link.</value>
-        public List<PublicLinkInfo> PublicLinks => _publicLinks ??= new List<PublicLinkInfo>();
+        public ConcurrentDictionary<string, PublicLinkInfo> PublicLinks
+            => _publicLinks ??= new ConcurrentDictionary<string, PublicLinkInfo>(StringComparer.InvariantCultureIgnoreCase);
 
-        private List<PublicLinkInfo> _publicLinks;
+        private ConcurrentDictionary<string, PublicLinkInfo> _publicLinks;
 
         public IEnumerable<PublicLinkInfo> GetPublicLinks(Cloud cloud)
         {
-            return !PublicLinks.Any() 
+            return PublicLinks.IsEmpty
                 ? cloud.GetSharedLinks(FullPath) 
-                : PublicLinks;
+                : PublicLinks.Values;
         }
 
         /// <summary>
@@ -198,14 +202,14 @@ namespace YaR.Clouds.Base
             int cnt = 0;
             foreach (var innerFile in Files)
             {
-                if (innerFile.PublicLinks.Any())
+                if (!innerFile.PublicLinks.IsEmpty)
                     info.Items.Add(new PublishInfoItem
                     {
                         Path = innerFile.FullPath,
-                        Urls =  innerFile.PublicLinks.Select(pli => pli.Uri).ToList(),
+                        Urls =  innerFile.PublicLinks.Select(pli => pli.Value.Uri).ToList(),
                         PlaylistUrl = !isSplitted || cnt > 0
                                           ? generateDirectVideoLink 
-                                                ? ConvertToVideoLink(cloud, innerFile.PublicLinks.First().Uri, videoResolution)
+                                                ? ConvertToVideoLink(cloud, innerFile.PublicLinks.Values.FirstOrDefault()?.Uri, videoResolution)
                                                 : null
                                           : null
                     });

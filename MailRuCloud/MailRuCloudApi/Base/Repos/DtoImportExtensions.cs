@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Authentication;
@@ -62,21 +63,26 @@ namespace YaR.Clouds.Base.Repos
 	    }
 
         internal static Folder ToFolder(this FsFolder data)
-		{
-			var res = new Folder((long)data.Size, data.FullPath) { IsChildrenLoaded = data.IsChildrenLoaded };
+        {
+            var res = new Folder((long)data.Size, data.FullPath) { IsChildrenLoaded = data.IsChildrenLoaded };
 
-			res.Files.AddRange(data.Items
-				.OfType<FsFile>()
-				.Select(f => f.ToFile())
-				.ToGroupedFiles());
+            res.Files = new ConcurrentDictionary<string, File>(
+                data.Items
+                    .OfType<FsFile>()
+                    .Select(f => f.ToFile())
+                    .ToGroupedFiles()
+                    .Select(item => new KeyValuePair<string, File>(item.FullPath, item)),
+                StringComparer.InvariantCultureIgnoreCase);
 
-			foreach (var it in data.Items.OfType<FsFolder>())
-			{
-				res.Folders.Add(it.ToFolder());
-			}
+            res.Folders = new ConcurrentDictionary<string, Folder>(
+                data.Items
+                    .OfType<FsFolder>()
+                    .Select(f => f.ToFolder())
+                    .Select(item => new KeyValuePair<string, Folder>(item.FullPath, item)),
+                StringComparer.InvariantCultureIgnoreCase);
 
-			return res;
-		}
+            return res;
+        }
 
 
 

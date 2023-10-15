@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using YaR.Clouds.Base;
 using YaR.Clouds.Base.Repos;
+using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.Types;
 using YaR.Clouds.Base.Requests.Types;
 using YaR.Clouds.Common;
 using YaR.Clouds.Extensions;
@@ -167,22 +168,25 @@ namespace YaR.Clouds
                         string linkpath = WebDavPath.Combine(folder.FullPath, flink.Name);
 
                         if (!flink.IsFile)
-                            folder.Folders.Add(new Folder(0, linkpath) { CreationTimeUtc = flink.CreationDate ?? DateTime.MinValue });
+                        {
+                            Folder item = new Folder(0, linkpath) { CreationTimeUtc = flink.CreationDate ?? DateTime.MinValue };
+                            folder.Folders.AddOrUpdate(item.FullPath, item, (_, _) => item);
+                        }
                         else
                         {
-                            if (folder.Files.Any(inf => inf.FullPath == linkpath))
+                            if (folder.Files.ContainsKey(linkpath))
                                 continue;
 
-                            var newfile = new File(linkpath, flink.Size, new PublicLinkInfo(flink.Href));
+                            var newFile = new File(linkpath, flink.Size, new PublicLinkInfo(flink.Href));
                             if (flink.CreationDate != null)
-                                newfile.LastWriteTimeUtc = flink.CreationDate.Value;
-                            folder.Files.Add(newfile);
+                                newFile.LastWriteTimeUtc = flink.CreationDate.Value;
+                            folder.Files.AddOrUpdate(newFile.FullPath, newFile, (_, _) => newFile);
                         }
                     }
                 }
             }
 
-            foreach (var childFolder in folder.Folders)
+            foreach (var childFolder in folder.Folders.Values)
                 FillWithULinks(childFolder);
         }
 
@@ -197,7 +201,7 @@ namespace YaR.Clouds
                 case Folder { IsChildrenLoaded: true } cfolder:
                 {
                     _itemCache.Add(cfolder.FullPath, cfolder);
-                    _itemCache.Add(cfolder.Files.Select(f => new KeyValuePair<string, IEntry>(f.FullPath, f)));
+                    _itemCache.Add(cfolder.Files.Select(f => new KeyValuePair<string, IEntry>(f.Value.FullPath, f.Value)));
 
                     foreach (var childFolder in cfolder.Entries)
                         CacheAddEntry(childFolder);
@@ -211,23 +215,33 @@ namespace YaR.Clouds
         public virtual IEntry GetItem(string path, ItemType itemType = ItemType.Unknown, bool resolveLinks = true)
             => GetItemAsync(path, itemType, resolveLinks).Result;
 
-        public IEnumerable<File> IsFileExists(string filename, IList<string> folderPaths)
+        public bool IsFileExists(string filename, List<string> folderPaths)
         {
             if (folderPaths == null)
-                return Enumerable.Empty<File>();
+                return false;
 
-            var folder = folderPaths
+            var folders = folderPaths
                 .AsParallel()
                 .WithDegreeOfParallelism(Math.Min(MaxInnerParallelRequests, folderPaths.Count))
                 .Select(async path => (Folder)await GetItemAsync(path, ItemType.Folder, false));
 
-            if (folder == null)
-                return Enumerable.Empty<File>();
+            if (folders == null)
+                return false;
 
-            var files = folder
-                .SelectMany(fld => (fld.Result?.Files ?? new List<File>()).Where(file => WebDavPath.PathEquals(file.Name, filename)));
+            foreach (var item in folders)
+            {
+                if (item.Result == null)
+                    continue;
+                Folder folder = item.Result;
+                // Вместо перебора и сравнения всех названий файлов в папке,
+                // формируем полный путь файла, как если бы он был в данной папке,
+                // а затем проверяем наличие в словаре Files по FullPath.
+                string fullPath = Path.Combine(folder.FullPath, filename);
+                if (folder.Files.TryGetValue(fullPath, out _))
+                    return true;
+            }
 
-            return files;
+            return false;
         }
 
         #region == Publish ==========================================================================================================================
@@ -274,7 +288,7 @@ namespace YaR.Clouds
             {
                 var url = await Publish(innerFile.FullPath);
                 innerFile.PublicLinks.Clear();
-                innerFile.PublicLinks.Add(new PublicLinkInfo(url));
+                innerFile.PublicLinks.TryAdd(url.AbsolutePath, new PublicLinkInfo(url));
             }
             var info = file.ToPublishInfo(this, generateDirectVideoLink, videoResolution);
 
@@ -309,7 +323,7 @@ namespace YaR.Clouds
         {
             var url = await Publish(folder.FullPath);
             folder.PublicLinks.Clear();
-            folder.PublicLinks.Add(new PublicLinkInfo(url));
+            folder.PublicLinks.TryAdd(url.AbsolutePath, new PublicLinkInfo(url));
             var info = folder.ToPublishInfo();
 
             if (!makeShareFile) 

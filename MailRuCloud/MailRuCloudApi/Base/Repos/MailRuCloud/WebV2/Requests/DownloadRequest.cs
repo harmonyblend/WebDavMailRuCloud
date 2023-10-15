@@ -20,7 +20,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
 
         private static HttpWebRequest CreateRequest(IAuth authent, IWebProxy proxy, File file, long instart, long inend,  string userAgent, Cached<Dictionary<ShardType, ShardInfo>> shards)
         {
-            bool isLinked = file.PublicLinks.Any();
+            bool isLinked = !file.PublicLinks.IsEmpty;
 
             string downloadkey = isLinked
                 ? authent.DownloadToken
@@ -32,7 +32,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
 
             string url = !isLinked
                 ? $"{shard.Url}{Uri.EscapeDataString(file.FullPath)}"
-                : $"{shard.Url}{file.PublicLinks.First().Uri.PathAndQuery.Remove(0, "/public".Length)}?key={downloadkey}";
+                : $"{shard.Url}{file.PublicLinks.Values.FirstOrDefault()?.Uri.PathAndQuery.Remove(0, "/public".Length) ?? string.Empty}?key={downloadkey}";
 
             var request = (HttpWebRequest) WebRequest.Create(url);
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -202,15 +203,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
             var folder = new Folder(data.Body.Size, WebDavPath.Combine(data.Body.Home ?? WebDavPath.Root, data.Body.Name))
             {
-                Folders = data.Body.List?
-                    .Where(it => FolderKinds.Contains(it.Kind))
-                    .Select(item => item.ToFolder(publicBaseUrl))
-                    .ToList(),
-                Files = data.Body.List?
-                    .Where(it => it.Kind == "file")
-                    .Select(item => item.ToFile(publicBaseUrl, ""))
-                    .ToGroupedFiles()
-                    .ToList()
+                Folders = data.Body.List.ToFolderDictionary(publicBaseUrl),
+                Files = data.Body.List.ToFileDictionary(publicBaseUrl),
             };
 
 
@@ -227,19 +221,39 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
                 ServerFoldersCount = data.Body.Count?.Folders,
                 ServerFilesCount = data.Body.Count?.Files,
 
-                Folders = data.Body.List?
-                    .Where(it => FolderKinds.Contains(it.Kind))
-                    .Select(item => item.ToFolder(publicBaseUrl))
-                    .ToList(),
-                Files = data.Body.List?
-                    .Where(it => it.Kind == "file")
-                    .Select(item => item.ToFile(publicBaseUrl, ""))
-                    .ToGroupedFiles()
-                    .ToList(),
+                Folders = data.Body.List.ToFolderDictionary(publicBaseUrl),
+                Files = data.Body.List.ToFileDictionary(publicBaseUrl),
                 IsChildrenLoaded = true
             };
 
             return folder;
+        }
+
+        public static ConcurrentDictionary<string, Folder> ToFolderDictionary(
+            this List<FolderInfoResult.FolderInfoBody.FolderInfoProps> data, string publicBaseUrl)
+        {
+            if (data == null)
+                return new ConcurrentDictionary<string, Folder>(StringComparer.InvariantCultureIgnoreCase);
+
+            return new ConcurrentDictionary<string, Folder>(
+                    data.Where(it => FolderKinds.Contains(it.Kind))
+                        .Select(item => item.ToFolder(publicBaseUrl))
+                        .Select(item => new KeyValuePair<string, Folder>(item.FullPath, item)),
+                    StringComparer.InvariantCultureIgnoreCase);
+        }
+
+        public static ConcurrentDictionary<string, File> ToFileDictionary(
+            this List<FolderInfoResult.FolderInfoBody.FolderInfoProps> data, string publicBaseUrl)
+        {
+            if (data == null)
+                return new ConcurrentDictionary<string, File>(StringComparer.InvariantCultureIgnoreCase);
+
+            return new ConcurrentDictionary<string, File>(
+                    data.Where(it => it.Kind == "file")
+                        .Select(item => item.ToFile(publicBaseUrl, ""))
+                        .ToGroupedFiles()
+                        .Select(item => new KeyValuePair<string, File>(item.FullPath, item)),
+                    StringComparer.InvariantCultureIgnoreCase);
         }
 
         /// <summary>
@@ -263,10 +277,11 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
         }
 
         //TODO: subject to heavily refact
-        public static File ToFile(this FolderInfoResult data, string publicBaseUrl, string home = null, Link ulink = null, string filename = null, string nameReplacement = null)
+        public static File ToFile(this FolderInfoResult data, string publicBaseUrl,
+            string home = null, Link ulink = null, string fileName = null, string nameReplacement = null)
         {
             if (ulink == null || ulink.IsLinkedToFileSystem)
-                if (string.IsNullOrEmpty(filename))
+                if (string.IsNullOrEmpty(fileName))
                 {
                     return new File(WebDavPath.Combine(data.Body.Home ?? "", data.Body.Name), data.Body.Size);
                 }
@@ -275,39 +290,39 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
             var z = data.Body.List?
                 .Where(it => it.Kind == "file")
-                .Select(it => filename != null && it.Name == filename
+                .Select(it => fileName != null && it.Name == fileName
                     ? it.ToFile(publicBaseUrl, nameReplacement)
                     : it.ToFile(publicBaseUrl, ""))
                 .ToList();
 
-            var cmpname = string.IsNullOrEmpty(nameReplacement)
-                ? filename
+            var cmpName = string.IsNullOrEmpty(nameReplacement)
+                ? fileName
                 : nameReplacement;
 
-            if (string.IsNullOrEmpty(cmpname) && data.Body.Weblink != "/" && ulink is { IsLinkedToFileSystem: false })
+            if (string.IsNullOrEmpty(cmpName) && data.Body.Weblink != "/" && ulink is { IsLinkedToFileSystem: false })
             {
-                cmpname = WebDavPath.Name(ulink.PublicLinks.First().Uri.OriginalString);
+                cmpName = WebDavPath.Name(ulink.PublicLinks.Values.FirstOrDefault()?.Uri.OriginalString ?? string.Empty);
             }
 
             var groupedFile = z?.ToGroupedFiles();
 
-            var res = groupedFile?.First(it => string.IsNullOrEmpty(cmpname) || it.Name == cmpname);
+            var res = groupedFile?.First(it => string.IsNullOrEmpty(cmpName) || it.Name == cmpName);
 
             return res;
         }
 
-        private static File ToFile(this FolderInfoResult.FolderInfoBody.FolderInfoProps item, string publicBaseUrl, string nameReplacement)
+        private static File ToFile(this FolderInfoResult.FolderInfoBody.FolderInfoProps item,
+            string publicBaseUrl, string nameReplacement)
         {
             try
             {
-
                 var path = string.IsNullOrEmpty(nameReplacement)
                     ? item.Home
                     : WebDavPath.Combine(WebDavPath.Parent(item.Home), nameReplacement);
 
-
                 var file = new File(path ?? item.Name, item.Size, new FileHashMrc(item.Hash));
-                file.PublicLinks.AddRange(item.Weblink.ToPublicLinkInfos(publicBaseUrl));
+                foreach (var link in item.Weblink.ToPublicLinkInfos(publicBaseUrl))
+                    file.PublicLinks.TryAdd(link.Uri.AbsolutePath, link);
 
                 var dt = UnixTimeStampToDateTime(item.Mtime, file.CreationTimeUtc);
                 file.CreationTimeUtc =
@@ -321,7 +336,6 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
                 Console.WriteLine(e);
                 throw;
             }
-
         }
 
 

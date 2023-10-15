@@ -9,10 +9,10 @@ namespace YaR.Clouds.Extensions
 {
     public static class Extensions
     {
-        internal static IEnumerable<PublicLinkInfo> ToPublicLinkInfos(this string uristring, string publicBaseUrl)
+        internal static IEnumerable<PublicLinkInfo> ToPublicLinkInfos(this string uriString, string publicBaseUrl)
         {
-            if (!string.IsNullOrEmpty(uristring))
-                yield return new PublicLinkInfo("", publicBaseUrl, uristring);
+            if (!string.IsNullOrEmpty(uriString))
+                yield return new PublicLinkInfo("", publicBaseUrl, uriString);
         }
 
 

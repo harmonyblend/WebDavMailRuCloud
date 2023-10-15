@@ -121,10 +121,14 @@ namespace YaR.Clouds.WebDavStore.StoreBase
                 {
                     Getter = (_, collection) =>
                     {
-                        int files = collection.DirectoryInfo.NumberOfFiles;
-                        int folders = collection.DirectoryInfo.NumberOfFolders;
-                        return (folders > 0 ? folders : collection.DirectoryInfo.ServerFoldersCount) +
-                               files > 0 ? files : collection.DirectoryInfo.ServerFilesCount ?? 0;
+                        var info = collection.DirectoryInfo;
+                        return (info.Folders.IsEmpty
+                                ? (info.ServerFoldersCount ?? 0)
+                                : info.Folders.Count)
+                               +
+                               (info.Files.IsEmpty
+                                ? (info.ServerFilesCount ?? 0)
+                                : info.Files.Count);
                     }
                 },
                 new DavExtCollectionIsFolder<T>
@@ -142,7 +146,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 new DavExtCollectionHasSubs<T> //Identifies whether this collection contains any collections which are folders (see "isfolder").
                 {
-                    Getter = (_, collection) => collection.DirectoryInfo.NumberOfFolders > 0 || collection.DirectoryInfo.ServerFoldersCount > 0
+                    Getter = (_, collection) => !collection.DirectoryInfo.Folders.IsEmpty || collection.DirectoryInfo.ServerFoldersCount > 0
                 },
 
                 new DavExtCollectionNoSubs<T> //Identifies whether this collection allows child collections to be created.
@@ -152,9 +156,9 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 new DavExtCollectionObjectCount<T> //To count the number of non-folder resources in the collection.
                 {
-                    Getter = (_, collection) => 
-                        collection.DirectoryInfo.NumberOfFiles > 0
-                            ? collection.DirectoryInfo.NumberOfFiles
+                    Getter = (_, collection) =>
+                        !collection.DirectoryInfo.Files.IsEmpty
+                            ? collection.DirectoryInfo.Files.Count
                             : collection.DirectoryInfo.ServerFilesCount ?? 0
                 },
 
@@ -165,9 +169,9 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 new DavExtCollectionVisibleCount<T>  //Counts the number of visible non-folder resources in the collection.
                 {
-                    Getter = (_, collection) => 
-                        collection.DirectoryInfo.NumberOfFiles > 0
-                            ? collection.DirectoryInfo.NumberOfFiles
+                    Getter = (_, collection) =>
+                        !collection.DirectoryInfo.Files.IsEmpty
+                            ? collection.DirectoryInfo.Files.Count
                             : collection.DirectoryInfo.ServerFilesCount ?? 0
                 },
 
@@ -218,9 +222,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
                 },
                 new DavSharedLink<T>
                 {
-                    Getter = (_, item) => !item.DirectoryInfo.PublicLinks.Any()
-                        ? string.Empty
-                        : item.DirectoryInfo.PublicLinks.First().Uri.OriginalString,
+                    Getter = (_, item) => item.DirectoryInfo.PublicLinks.Values.FirstOrDefault()?.Uri.OriginalString ?? string.Empty,
                     Setter = (_, _, _) => DavStatusCode.Ok
                 }
             };

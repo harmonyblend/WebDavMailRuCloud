@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -27,40 +28,34 @@ namespace YaR.Clouds.Base
         /// <param name="size">Folder size.</param>
         /// <param name="fullPath">Full folder path.</param>
         /// <param name="publicLinks">Public folder link.</param>
-        public Folder(FileSize size, string fullPath, IEnumerable<PublicLinkInfo> publicLinks = null):this(fullPath)
+        public Folder(FileSize size, string fullPath, IEnumerable<PublicLinkInfo> publicLinks = null)
+            : this(fullPath)
         {
             Size = size;
-            if (null != publicLinks)
-                PublicLinks.AddRange(publicLinks);
+            if (publicLinks != null)
+            {
+                foreach (var link in publicLinks)
+                    PublicLinks.TryAdd(link.Uri.AbsolutePath, link);
+            }
         }
 
         public IEnumerable<IEntry> Entries
         {
             get
             {
-                foreach (var file in Files)
+                foreach (var file in Files.Values)
                     yield return file;
-                foreach (var folder in Folders)
+                foreach (var folder in Folders.Values)
                     yield return folder;
             }
         }
 
-        public List<File> Files { get; set; } = new();
+        public ConcurrentDictionary<string /* FullPath of File */, File> Files { get; set; }
+            = new(StringComparer.InvariantCultureIgnoreCase);
 
-        public List<Folder> Folders { get; set; } = new();
+        public ConcurrentDictionary<string /* FullPath of Folder */, Folder> Folders { get; set; }
+            = new(StringComparer.InvariantCultureIgnoreCase);
 
-
-        /// <summary>
-        /// Gets number of folders in folder.
-        /// </summary>
-        /// <value>Number of folders.</value>
-        public int NumberOfFolders => Files.Count;
-
-        /// <summary>
-        /// Gets number of files in folder.
-        /// </summary>
-        /// <value>Number of files.</value>
-        public int NumberOfFiles => Folders.Count;
 
         /// <summary>
         /// Gets folder name.
@@ -88,14 +83,16 @@ namespace YaR.Clouds.Base
         /// Gets public file link.
         /// </summary>
         /// <value>Public link.</value>
-        public List<PublicLinkInfo> PublicLinks => _publicLinks ??= new List<PublicLinkInfo>();
-        private List<PublicLinkInfo> _publicLinks;
+        public ConcurrentDictionary<string, PublicLinkInfo> PublicLinks
+            => _publicLinks ??= new ConcurrentDictionary<string, PublicLinkInfo>(StringComparer.InvariantCultureIgnoreCase);
+
+        private ConcurrentDictionary<string, PublicLinkInfo> _publicLinks;
 
         public IEnumerable<PublicLinkInfo> GetPublicLinks(Cloud cloud)
         {
-            return !PublicLinks.Any() 
+            return PublicLinks.IsEmpty
                 ? cloud.GetSharedLinks(FullPath) 
-                : PublicLinks;
+                : PublicLinks.Values;
         }
 
 
@@ -111,7 +108,7 @@ namespace YaR.Clouds.Base
 
         public bool IsFile => false;
 
-		public bool IsChildrenLoaded { get; internal set; }
+        public bool IsChildrenLoaded { get; internal set; }
 
 
         public int? ServerFoldersCount { get; set; }
@@ -120,29 +117,32 @@ namespace YaR.Clouds.Base
         public PublishInfo ToPublishInfo()
         {
             var info = new PublishInfo();
-            if (PublicLinks.Any())
-                info.Items.Add(new PublishInfoItem { Path = FullPath, Urls = PublicLinks.Select(pli => pli.Uri).ToList() });
+            if (!PublicLinks.IsEmpty)
+                info.Items.Add(new PublishInfoItem { Path = FullPath, Urls = PublicLinks.Select(pli => pli.Value.Uri).ToList() });
             return info;
         }
 
 
-	    //public List<KeyValuePair<string, IEntry>> GetLinearChildren()
-	    //{
-		    
-	    //}
+        //public List<KeyValuePair<string, IEntry>> GetLinearChildren()
+        //{
+            
+        //}
         public void Forget(object whomKey)
         {
-            string key = whomKey.ToString();
+            string key = whomKey?.ToString();
+
             if (string.IsNullOrEmpty(key))
                 return;
-            var file = Files.FirstOrDefault(f => f.FullPath == key);
-            if (null != file)
-                Files.Remove(file);
-            else
+
+            // Удалять начинаем с директорий, т.к. их обычно меньше,
+            // а значит поиск должен завершиться в среднем быстрее.
+
+            if (!Folders.TryRemove(key, out _))
             {
-                var folder = Folders.FirstOrDefault(f => f.FullPath == key);
-                if (null != folder)
-                    Folders.Remove(folder);
+                // Если по ключу в виде полного пути не удалось удалить директорию,
+                // пытаемся по этому же ключу удалить файл, если он есть.
+                // Если ничего не удалилось, значит и удалять нечего.
+                _ = Files.TryRemove( key, out _);
             }
         }
     }

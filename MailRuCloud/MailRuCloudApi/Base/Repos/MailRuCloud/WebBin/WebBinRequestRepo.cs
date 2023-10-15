@@ -71,7 +71,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
         private DownloadStream GetDownloadStreamInternal(File afile, long? start = null, long? end = null)
         {
-            bool isLinked = afile.PublicLinks.Any();
+            bool isLinked = !afile.PublicLinks.IsEmpty;
 
             Cached<ServerRequestResult> downServer = null;
             var pendingServers = isLinked
@@ -201,10 +201,14 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
                     var zz = datares.ToFolder();
 
-                    return zz.Files.First(f => f.Name == name);
+                    // return zz.Files.Values.FirstOrDefault(f => f.Name == name);
+                    // Вариант без перебора предпочтительнее
+                    if (zz.Files.TryGetValue(path, out var file))
+                        return file;
+                    return null;
                 }
             }
-            catch (RequestException re) when (re.StatusCode ==  HttpStatusCode.NotFound)
+            catch (RequestException re) when (re.StatusCode == HttpStatusCode.NotFound)
             {
                 return null;
             }
@@ -254,7 +258,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
                     PublicBaseUrlDefault,
                     home: WebDavPath.Parent(path.Path ?? string.Empty),
                     ulink: path.Link,
-                    filename: path.Link == null ? WebDavPath.Name(path.Path) : path.Link.OriginalName,
+                    fileName: path.Link == null ? WebDavPath.Name(path.Path) : path.Link.OriginalName,
                     nameReplacement: path.Link?.IsLinkedToFileSystem ?? true ? WebDavPath.Name(path.Path) : path.Link.Name )
                 : datares.ToFolder(PublicBaseUrlDefault, path.Path, path.Link);
 

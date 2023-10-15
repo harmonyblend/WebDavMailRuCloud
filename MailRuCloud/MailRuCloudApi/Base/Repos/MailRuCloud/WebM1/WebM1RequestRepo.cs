@@ -71,7 +71,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
 
         private DownloadStream GetDownloadStreamInternal(File afile, long? start = null, long? end = null)
         {
-            bool isLinked = afile.PublicLinks.Any();
+            bool isLinked = !afile.PublicLinks.IsEmpty;
 
             Cached<ServerRequestResult> downServer = null;
             var pendingServers = isLinked
@@ -87,7 +87,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                     downServer = pendingServers.Next(downServer);
 
                     string url =(isLinked
-                            ? $"{downServer.Value.Url}{WebDavPath.EscapeDataString(file.PublicLinks.First().Uri.PathAndQuery)}"
+                            ? $"{downServer.Value.Url}{WebDavPath.EscapeDataString(file.PublicLinks.Values.FirstOrDefault()?.Uri.PathAndQuery)}"
                             : $"{downServer.Value.Url}{Uri.EscapeDataString(file.FullPath.TrimStart('/'))}") +
                         $"?client_id={HttpSettings.ClientId}&token={Authent.AccessToken}";
                     var uri = new Uri(url);
@@ -259,7 +259,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                     PublicBaseUrlDefault,
                     home: WebDavPath.Parent(path.Path ?? string.Empty),
                     ulink: path.Link,
-                    filename: path.Link == null ? WebDavPath.Name(path.Path) : path.Link.OriginalName,
+                    fileName: path.Link == null ? WebDavPath.Name(path.Path) : path.Link.OriginalName,
                     nameReplacement: path.Link?.IsLinkedToFileSystem ?? true ? WebDavPath.Name(path.Path) : null )
                 : datares.ToFolder(PublicBaseUrlDefault, path.Path, path.Link);
 

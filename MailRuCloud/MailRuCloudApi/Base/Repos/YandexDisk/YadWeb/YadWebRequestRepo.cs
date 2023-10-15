@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -237,13 +238,20 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             if (WebDavPath.PathEquals(path, YadMediaPath))
                 return root;
 
-            string albumName = WebDavPath.Name(path);
-            var album = root.Folders.FirstOrDefault(f => f.Name == albumName);
-            if (null == album)
+            //string albumName = WebDavPath.Name(path);
+            //var album = root.Folders.Values.FirstOrDefault(f => f.Name == albumName);
+            //if (null == album)
+            //    return null;
+            // Вариант без перебора предпочтительнее
+            if (!root.Folders.TryGetValue(path, out var album))
                 return null;
 
-            _ = new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
-                .With(new YadFolderInfoPostModel(album.PublicLinks.First().Key, "/album"),
+            var key = album.PublicLinks.Values.FirstOrDefault()?.Key;
+            if (key == null)
+                return null;
+
+            _ = new YaDCommonRequest(HttpSettings, (YadWebAuth)Authent)
+                .With(new YadFolderInfoPostModel(key, "/album"),
                     out YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderInfo)
                 .MakeRequestAsync()
                 .Result;
@@ -265,19 +273,31 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 .MakeRequestAsync();
 
             if (slices.Data.Albums.Camera != null)
-                res.Folders.Add(new Folder($"{YadMediaPath}/.{slices.Data.Albums.Camera.Id}")
-                { ServerFilesCount = (int)slices.Data.Albums.Camera.Count });
-            if (slices.Data.Albums.Photounlim != null)
-                res.Folders.Add(new Folder($"{YadMediaPath}/.{slices.Data.Albums.Photounlim.Id}")
-                { ServerFilesCount = (int)slices.Data.Albums.Photounlim.Count });
-            if (slices.Data.Albums.Videos != null)
-                res.Folders.Add(new Folder($"{YadMediaPath}/.{slices.Data.Albums.Videos.Id}")
-                { ServerFilesCount = (int)slices.Data.Albums.Videos.Count });
-
-            res.Folders.AddRange(albums.Data.Select(al => new Folder($"{YadMediaPath}/{al.Title}")
             {
-                PublicLinks = { new PublicLinkInfo(al.Public.PublicUrl) {Key = al.Public.PublicKey} }
-            }));
+                Folder folder = new Folder($"{YadMediaPath}/.{slices.Data.Albums.Camera.Id}")
+                                    { ServerFilesCount = (int)slices.Data.Albums.Camera.Count };
+                res.Folders.TryAdd(folder.FullPath, folder);
+            }
+            if (slices.Data.Albums.Photounlim != null)
+            {
+                Folder folder = new Folder($"{YadMediaPath}/.{slices.Data.Albums.Photounlim.Id}")
+                                    { ServerFilesCount = (int)slices.Data.Albums.Photounlim.Count };
+                res.Folders.TryAdd(folder.FullPath, folder);
+            }
+            if (slices.Data.Albums.Videos != null)
+            {
+                Folder folder = new Folder($"{YadMediaPath}/.{slices.Data.Albums.Videos.Id}")
+                                    { ServerFilesCount = (int)slices.Data.Albums.Videos.Count };
+                res.Folders.TryAdd(folder.FullPath, folder);
+            }
+
+            foreach (var item in albums.Data)
+            {
+                Folder folder = new Folder($"{YadMediaPath}/{item.Title}");
+                folder.PublicLinks.TryAdd(
+                    item.Public.PublicUrl,
+                    new PublicLinkInfo(item.Public.PublicUrl) { Key = item.Public.PublicKey });
+            }
 
             return res;
         }
