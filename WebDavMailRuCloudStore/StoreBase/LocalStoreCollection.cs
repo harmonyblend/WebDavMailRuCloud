@@ -273,7 +273,8 @@ namespace YaR.Clouds.WebDavStore.StoreBase
             {
                 var item = FindSubItem(name);
 
-                if (null == item) return DavStatusCode.NotFound;
+                if (item == null)
+                    return DavStatusCode.NotFound;
 
                 var cloud = CloudManager.Instance(httpContext.Session.Principal.Identity);
                 bool res = await cloud.Remove(item);

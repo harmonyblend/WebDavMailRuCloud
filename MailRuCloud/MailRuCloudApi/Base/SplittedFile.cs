@@ -52,9 +52,9 @@ namespace YaR.Clouds.Base
         public override IList<File> Files { get; }
 
 
-        public override File New(string newfullPath)
+        public override File New(string newFullPath)
         {
-            string path = WebDavPath.Parent(newfullPath);
+            string path = WebDavPath.Parent(newFullPath);
 
             var flist = Files
                 .Select(f => f.New(WebDavPath.Combine(path, f.Name)))

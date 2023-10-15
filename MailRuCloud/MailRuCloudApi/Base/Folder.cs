@@ -20,6 +20,7 @@ namespace YaR.Clouds.Base
         public Folder(string fullPath)
         {
             FullPath = WebDavPath.Clean(fullPath);
+            Name = WebDavPath.Name(FullPath);
         }
 
         /// <summary>
@@ -61,7 +62,7 @@ namespace YaR.Clouds.Base
         /// Gets folder name.
         /// </summary>
         /// <value>Folder name.</value>
-        public string Name => WebDavPath.Name(FullPath);
+        public string Name { get; }
 
         /// <summary>
         /// Gets folder size.
@@ -73,10 +74,7 @@ namespace YaR.Clouds.Base
         /// Gets full folder path on the server.
         /// </summary>
         /// <value>Full folder path.</value>
-        public string FullPath
-        {
-            get;
-        }
+        public string FullPath { get; }
 
 
         /// <summary>

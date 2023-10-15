@@ -809,7 +809,7 @@ namespace YaR.Clouds
 
             var res = await Account.RequestRepo.Remove(fullPath);
             if (!res.IsSuccess) 
-                return res.IsSuccess;
+                return false;
 
             //remove inner links
             if (LinkManager != null)

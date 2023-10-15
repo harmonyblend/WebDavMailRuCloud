@@ -112,6 +112,7 @@ namespace YaR.Clouds.Base
             {
                 _fullPath = WebDavPath.Clean(value);
                 Name = WebDavPath.Name(_fullPath);
+                Path = WebDavPath.Parent(_fullPath);
             }
         }
 
@@ -120,7 +121,7 @@ namespace YaR.Clouds.Base
         /// <summary>
         /// Path to file (without filename)
         /// </summary>
-        public string Path => WebDavPath.Parent(FullPath);
+        public string Path { get; private set; }
 
         /// <summary>
         /// Gets public file link.
@@ -229,8 +230,5 @@ namespace YaR.Clouds.Base
                    //Base64Encode(publicLink.TrimStart('/')) +
                    //".m3u8?double_encode=1";
         }
-
-
     }
 }
-

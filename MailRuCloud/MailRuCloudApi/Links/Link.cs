@@ -20,6 +20,7 @@ namespace YaR.Clouds.Links
         {
             _rootLink = rootLink;
             FullPath = fullPath;
+            Name = WebDavPath.Name(fullPath);
 
             IsRoot = WebDavPath.PathEquals(WebDavPath.Parent(FullPath), _rootLink.MapTo);
 
@@ -40,7 +41,7 @@ namespace YaR.Clouds.Links
 
         public string OriginalName { get; set; }
 
-        public string Name => WebDavPath.Name(FullPath);
+        public string Name { get; }
 
         public Cloud.ItemType ItemType { get; set; }
 
