@@ -67,6 +67,16 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
                 Result = JsonConvert.DeserializeObject<YadResponseResult>(
                     text, new KnownYadModelConverter(_outData))
             };
+
+            //Logger.Debug($"_postData.Sk={_postData?.Sk} | Result.sk={msg.Result?.Sk}");
+            /*
+             * Строка sk выглядит так: "sk": "cdc3dee74a379c1adc792ef087cf8c9ba19ca9f5:1693681795"
+             * Правая часть содержит время после двоеточия - количество секунд, начиная с 01.01.1970.
+             * Обновляем sk полученным значением sk.
+             */
+            if (!string.IsNullOrWhiteSpace(msg.Result?.Sk))
+                YadAuth.DiskSk = msg.Result.Sk;
+
             if (msg.Result.Models != null &&
                 msg.Result.Models.Any(m => m.Error != null))
             {
