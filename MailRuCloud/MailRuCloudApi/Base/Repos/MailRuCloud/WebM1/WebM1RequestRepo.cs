@@ -92,7 +92,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                         $"?client_id={HttpSettings.ClientId}&token={Authent.AccessToken}";
                     var uri = new Uri(url);
 
-                    request = (HttpWebRequest) WebRequest.Create(uri.OriginalString);
+#pragma warning disable SYSLIB0014 // Type or member is obsolete
+                    request = (HttpWebRequest)WebRequest.Create(uri.OriginalString);
+#pragma warning restore SYSLIB0014 // Type or member is obsolete
 
                     request.AddRange(instart, inend);
                     request.Proxy = HttpSettings.Proxy;

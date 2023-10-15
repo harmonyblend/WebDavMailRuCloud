@@ -34,7 +34,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
                 ? $"{shard.Url}{Uri.EscapeDataString(file.FullPath)}"
                 : $"{shard.Url}{file.PublicLinks.Values.FirstOrDefault()?.Uri.PathAndQuery.Remove(0, "/public".Length) ?? string.Empty}?key={downloadkey}";
 
-            var request = (HttpWebRequest) WebRequest.Create(url);
+#pragma warning disable SYSLIB0014 // Type or member is obsolete
+            var request = (HttpWebRequest)WebRequest.Create(url);
+#pragma warning restore SYSLIB0014 // Type or member is obsolete
 
             request.Headers.Add("Accept-Ranges", "bytes");
             request.AddRange(instart, inend);

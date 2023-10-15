@@ -26,7 +26,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
 
         protected override byte[] CreateHttpContent()
         {
+#pragma warning disable SYSLIB0013 // Type or member is obsolete
             string data = $"Login={Uri.EscapeUriString(Auth.Login)}&Domain={CommonSettings.Domain}&Password={Uri.EscapeUriString(Auth.Password)}";
+#pragma warning restore SYSLIB0013 // Type or member is obsolete
 
             return Encoding.UTF8.GetBytes(data);
         }

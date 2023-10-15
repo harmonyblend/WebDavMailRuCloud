@@ -54,6 +54,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
 
         protected override byte[] CreateHttpContent()
         {
+#pragma warning disable SYSLIB0013 // Type or member is obsolete
             var keyValues = new List<KeyValuePair<string, string>>
             {
                 new("csrf_token", Uri.EscapeUriString(_csrf)),
@@ -61,6 +62,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
                 new("password", Uri.EscapeUriString(_auth.Password)),
                 new("retpath", Uri.EscapeUriString("https://disk.yandex.ru/client/disk"))
             };
+#pragma warning restore SYSLIB0013 // Type or member is obsolete
             var content = new FormUrlEncodedContent(keyValues);
             var d = content.ReadAsByteArrayAsync().Result;
             return d;

@@ -34,7 +34,9 @@ namespace YaR.Clouds.Base.Requests
             // https://stackoverflow.com/questions/20211496/uri-ignore-special-characters
             //var udriz = new Uri(new Uri(domain), RelationalUri, true);
 
+#pragma warning disable SYSLIB0014 // Type or member is obsolete
             var request = (HttpWebRequest)WebRequest.Create(uriz);
+#pragma warning restore SYSLIB0014 // Type or member is obsolete
             request.Proxy = Settings.Proxy;
             request.CookieContainer = Auth?.Cookies;
             request.Method = "GET";

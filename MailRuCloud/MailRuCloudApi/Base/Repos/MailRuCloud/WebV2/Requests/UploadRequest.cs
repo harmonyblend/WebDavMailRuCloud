@@ -17,7 +17,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         {
             var url = new Uri($"{shardUrl}?cloud_domain=2&{authent.Login}");
 
+#pragma warning disable SYSLIB0014 // Type or member is obsolete
             var request = (HttpWebRequest)WebRequest.Create(url.OriginalString);
+#pragma warning restore SYSLIB0014 // Type or member is obsolete
             request.Proxy = proxy;
             request.CookieContainer = authent.Cookies;
             request.Method = "PUT";

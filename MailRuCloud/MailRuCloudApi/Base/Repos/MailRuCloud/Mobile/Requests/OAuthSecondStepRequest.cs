@@ -21,7 +21,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
 
         protected override byte[] CreateHttpContent()
         {
+#pragma warning disable SYSLIB0013 // Type or member is obsolete
             var data = $"client_id={Settings.ClientId}&grant_type=password&username={Uri.EscapeUriString(_login)}&tsa_token={_tsaToken}&auth_code={_authCode}";
+#pragma warning restore SYSLIB0013 // Type or member is obsolete
             return Encoding.UTF8.GetBytes(data);
         }
     }

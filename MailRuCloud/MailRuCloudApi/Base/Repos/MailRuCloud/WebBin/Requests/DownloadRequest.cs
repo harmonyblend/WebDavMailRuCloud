@@ -44,7 +44,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin.Requests
 
             var uri = new Uri(url);
 
-            HttpWebRequest request = (HttpWebRequest) WebRequest.Create(uri.OriginalString);
+#pragma warning disable SYSLIB0014 // Type or member is obsolete
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(uri.OriginalString);
+#pragma warning restore SYSLIB0014 // Type or member is obsolete
 
             request.AllowAutoRedirect = true;
 

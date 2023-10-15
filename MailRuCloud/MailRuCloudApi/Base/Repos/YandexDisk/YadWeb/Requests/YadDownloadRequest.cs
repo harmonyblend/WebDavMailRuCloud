@@ -15,7 +15,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
         private static HttpWebRequest CreateRequest(IAuth authent, IWebProxy proxy, string url, long instart, long inend,  string userAgent)
         {
-            var request = (HttpWebRequest) WebRequest.Create(url);
+#pragma warning disable SYSLIB0014 // Type or member is obsolete
+            var request = (HttpWebRequest)WebRequest.Create(url);
+#pragma warning restore SYSLIB0014 // Type or member is obsolete
 
             request.Headers.Add("Accept-Ranges", "bytes");
             request.Headers.Add("Upgrade-Insecure-Requests", "1");
