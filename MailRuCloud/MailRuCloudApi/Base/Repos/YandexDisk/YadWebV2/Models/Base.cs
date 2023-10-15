@@ -42,7 +42,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
 
 
 
-    public class YadResponceResult
+    public class YadResponseResult
     {
         [JsonProperty("uid")]
         public long Uid { get; set; }

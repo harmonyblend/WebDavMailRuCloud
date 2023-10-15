@@ -9,7 +9,7 @@ using YaR.Clouds.Base.Requests;
 
 namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
 {
-    class YaDCommonRequest : BaseRequestJson<YadResponceResult>
+    class YaDCommonRequest : BaseRequestJson<YadResponseResult>
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(YaDCommonRequest));
 
@@ -53,7 +53,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
                                                        .Select(m => m.Name)
                                                        .Aggregate((current, next) => current + "," + next);
 
-        protected override RequestResponse<YadResponceResult> DeserializeMessage(
+        protected override RequestResponse<YadResponseResult> DeserializeMessage(
             NameValueCollection responseHeaders, System.IO.Stream stream)
         {
             using var sr = new StreamReader(stream);
@@ -61,10 +61,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
             string text = sr.ReadToEnd();
             //Logger.Debug(text);
 
-            var msg = new RequestResponse<YadResponceResult>
+            var msg = new RequestResponse<YadResponseResult>
             {
                 Ok = true,
-                Result = JsonConvert.DeserializeObject<YadResponceResult>(
+                Result = JsonConvert.DeserializeObject<YadResponseResult>(
                     text, new KnownYadModelConverter(_outData))
             };
             if (msg.Result.Models != null &&
