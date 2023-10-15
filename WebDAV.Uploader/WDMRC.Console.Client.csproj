@@ -11,6 +11,7 @@
     <RootNamespace>YaR.CloudMailRu.Client.Console</RootNamespace>
     <LangVersion>$(CommonLangVersion)</LangVersion>
     <RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
+    <Version>$(ReleaseVersion)</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|netcoreapp3.0|AnyCPU'">

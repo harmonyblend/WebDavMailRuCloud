@@ -26,6 +26,7 @@
     <PackageProjectUrl>https://github.com/yar229/WebDavMailRuCloud</PackageProjectUrl>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
     <RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
+    <Title>WebDAV emulator for Cloud.mail.ru / Yandex.Disk</Title>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
