@@ -13,7 +13,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
     {
         //private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(FishCommand));
 
-        public ListCommand(Cloud cloud, string path, IList<string> parames) : base(cloud, path, parames)
+        public ListCommand(Cloud cloud, string path, IList<string> parameters) : base(cloud, path, parameters)
         {
         }
 
