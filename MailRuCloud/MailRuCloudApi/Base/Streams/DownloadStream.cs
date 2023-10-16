@@ -23,7 +23,8 @@ namespace YaR.Clouds.Base.Streams
         private RingBufferedStream _innerStream;
         private bool _initialized;
 
-        public DownloadStream(Func<long, long, File, CustomDisposable<HttpWebResponse>> responseGenerator, File file, long? start = null, long? end = null)
+        public DownloadStream(Func<long, long, File, CustomDisposable<HttpWebResponse>> responseGenerator,
+            File file, long? start = null, long? end = null)
             : this(responseGenerator, file.Parts, start, end)
         {
         }

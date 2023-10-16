@@ -30,8 +30,12 @@ namespace NWebDav.Server.HttpListener
                 // Prevent any exceptions
                 try
                 {
-                    // At first send remaining buffered byte to client
-                    _response.OutputStream?.Flush();
+                    if (!Response.IsAborted)
+                    {
+                        // At first send remaining buffered byte to client
+                        _response.OutputStream?.Flush();
+                        _response.OutputStream?.Close();
+                    }
                 }
                 catch { }
 

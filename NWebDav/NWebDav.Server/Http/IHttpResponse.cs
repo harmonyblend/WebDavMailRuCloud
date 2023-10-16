@@ -66,5 +66,7 @@ namespace NWebDav.Server.Http
         Stream Stream { get; }
 
         void Abort();
+
+        bool IsAborted { get; }
     }
 }

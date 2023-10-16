@@ -37,6 +37,12 @@ namespace YaR.Clouds.Base
         private IFileHash _hash;
 
         /// <summary>
+        /// Заполняется операцией GetDownloadStream,
+        /// чтобы при повторном обращении на чтение файла не тратить время на получения URL'а.
+        /// </summary>
+        public string DownloadUrlCache { get; set; } = null;
+
+        /// <summary>
         /// makes copy of this file with new path
         /// </summary>
         /// <param name="newFullPath"></param>

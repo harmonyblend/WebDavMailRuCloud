@@ -9,9 +9,12 @@ namespace NWebDav.Server.HttpListener
     {
         private readonly HttpListenerResponse _response;
 
+        private bool _isAborted;
+
         internal HttpResponse(HttpListenerResponse response)
         {
             _response = response;
+            _isAborted = false;
         }
 
         public int Status
@@ -46,8 +49,11 @@ namespace NWebDav.Server.HttpListener
 
         public void Abort()
         {
+            _isAborted = true;
             _response.Abort();
         }
+
+        public bool IsAborted => _isAborted;
 
         public Stream Stream => _response.OutputStream;
     }

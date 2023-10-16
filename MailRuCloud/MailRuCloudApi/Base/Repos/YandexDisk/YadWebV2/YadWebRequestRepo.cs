@@ -77,34 +77,41 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
         public HttpCommonSettings HttpSettings { get; private set; }
 
-        public Stream GetDownloadStream(File afile, long? start = null, long? end = null)
+        public Stream GetDownloadStream(File aFile, long? start = null, long? end = null)
         {
             CustomDisposable<HttpWebResponse> ResponseGenerator(long instart, long inend, File file)
             {
                 //var urldata = new YadGetResourceUrlRequest(HttpSettings, (YadWebAuth)Authent, file.FullPath)
                 //    .MakeRequestAsync()
                 //    .Result;
-
-                var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth)Authent)
-                    .With(new YadGetResourceUrlPostModel(file.FullPath),
-                        out YadResponseModel<ResourceUrlData, ResourceUrlParams> itemInfo)
-                    .MakeRequestAsync().Result;
-
-                if (itemInfo == null ||
-                    itemInfo.Error != null ||
-                    itemInfo.Data == null ||
-                    itemInfo.Data.Error != null ||
-                    itemInfo?.Data?.File == null)
+                string url = null;
+                if (file.DownloadUrlCache == null)
                 {
-                    throw new FileNotFoundException(string.Concat(
-                        "File reading error ", itemInfo?.Error?.Message,
-                        " ",
-                        itemInfo?.Data?.Error?.Message,
-                        " ",
-                        itemInfo?.Data?.Error?.Body?.Title));
-                }
+                    var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth)Authent)
+                        .With(new YadGetResourceUrlPostModel(file.FullPath),
+                            out YadResponseModel<ResourceUrlData, ResourceUrlParams> itemInfo)
+                        .MakeRequestAsync().Result;
 
-                var url = "https:" + itemInfo.Data.File;
+                    if (itemInfo == null ||
+                        itemInfo.Error != null ||
+                        itemInfo.Data == null ||
+                        itemInfo.Data.Error != null ||
+                        itemInfo?.Data?.File == null)
+                    {
+                        throw new FileNotFoundException(string.Concat(
+                            "File reading error ", itemInfo?.Error?.Message,
+                            " ",
+                            itemInfo?.Data?.Error?.Message,
+                            " ",
+                            itemInfo?.Data?.Error?.Body?.Title));
+                    }
+                    url = "https:" + itemInfo.Data.File;
+                    file.DownloadUrlCache = url;
+                }
+                else
+                {
+                    url = file.DownloadUrlCache;
+                }
                 HttpWebRequest request = new YadDownloadRequest(HttpSettings, (YadWebAuth)Authent, url, instart, inend);
                 var response = (HttpWebResponse)request.GetResponse();
 
@@ -115,7 +122,12 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                 };
             }
 
-            var stream = new DownloadStream(ResponseGenerator, afile, start, end);
+            if (start.HasValue || end.HasValue)
+                Logger.Debug($"Download:  {aFile.FullPath} [{start}-{end}]");
+            else
+                Logger.Debug($"Download:  {aFile.FullPath}");
+
+            var stream = new DownloadStream(ResponseGenerator, aFile, start, end);
             return stream;
         }
 
@@ -127,9 +139,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
         //        .Result;
         //    var url = urldata.Models[0].Data.UploadUrl;
 
-        //    var result = new YadUploadRequest(HttpSettings, (YadWebAuth)Authent, url, file.OriginalSize);
-        //    return result;
-        //}
+            //    var result = new YadUploadRequest(HttpSettings, (YadWebAuth)Authent, url, file.OriginalSize);
+            //    return result;
+            //}
 
         public ICloudHasher GetHasher()
         {
