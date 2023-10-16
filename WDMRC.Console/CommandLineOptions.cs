@@ -50,7 +50,7 @@ namespace YaR.Clouds.Console
         [Option("protocol", Default = Protocol.WebM1Bin, HelpText = "Cloud protocol")]
         public Protocol Protocol { get; set; }
 
-        [Option("cache-listing", Default = 30, HelpText = "Cache folders listing, sec")]
+        [Option("cache-listing", Default = 30, HelpText = "Duration of in-memory cache of folder's listing, sec")]
         public int CacheListingSec { get; set; }
 
         [Option("cache-listing-depth", Default = 1, HelpText = "List query folder depth, always equals 1 when cache-listing>0")]

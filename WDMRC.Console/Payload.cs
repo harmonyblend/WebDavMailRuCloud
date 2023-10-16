@@ -217,7 +217,7 @@ namespace YaR.Clouds.Console
             Logger.Info($"Cloud download/upload timeout: {options.ReadWriteTimeoutSec} sec");
             Logger.Info($"Wait for 100-Continue timeout: {options.Wait100ContinueTimeoutSec} sec");
             Logger.Info($"Cloud protocol: {options.Protocol}");
-            Logger.Info($"Cache listings, sec: {options.CacheListingSec}");
+            Logger.Info($"Duration of in-memory cache of folder's listing: {options.CacheListingSec} sec");
             Logger.Info($"List query folder depth: {options.CacheListingDepth}");
             Logger.Info($"Use locks: {options.UseLocks}");
             Logger.Info($"Support links in /item.links.wdmrc: {(!options.DisableLinkManager)}");
