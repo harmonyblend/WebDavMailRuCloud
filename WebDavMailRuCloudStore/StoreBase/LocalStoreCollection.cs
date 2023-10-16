@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using NWebDav.Server;
 using NWebDav.Server.Http;
@@ -66,19 +67,25 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         {
             get
             {
-                if (null != _items) 
+                if (_items is not null)
                     return _items;
 
-                lock (_itemsLocker)
+                _locker.Wait();
+                try
                 {
                     _items ??= GetItemsAsync(_context).Result;
                 }
+                finally
+                {
+                    _locker.Release();
+                }
+
                 return _items;
             }
         }
 
         private IEnumerable<IStoreItem> _items;
-        private readonly object _itemsLocker = new();
+        private readonly SemaphoreSlim _locker = new SemaphoreSlim(1);
 
         //public IEnumerable<LocalStoreCollection> Folders => Items.Where(it => it is LocalStoreCollection).Cast<LocalStoreCollection>();
         //public IEnumerable<LocalStoreItem> Files => Items.Where(it => it is LocalStoreItem).Cast<LocalStoreItem>();

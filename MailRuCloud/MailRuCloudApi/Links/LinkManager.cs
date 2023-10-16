@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using YaR.Clouds.Base;
@@ -16,6 +17,8 @@ namespace YaR.Clouds.Links
     /// </summary>
     public class LinkManager
     {
+        private readonly TimeSpan SaveAndLoadTimeout = TimeSpan.FromMinutes(5);
+
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(LinkManager));
 
         private const string LinkContainerName = "item.links.wdmrc";
@@ -24,13 +27,18 @@ namespace YaR.Clouds.Links
         private ItemList _itemList = new();
         private readonly ItemCache<string, IEntry> _itemCache;
 
-        private readonly object _lockContainer = new();
+        private readonly SemaphoreSlim _locker;
 
 
         public LinkManager(Cloud cloud)
         {
+            _locker = new SemaphoreSlim(1);
             _cloud = cloud;
-            _itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(60)) { CleanUpPeriod = TimeSpan.FromMinutes(5) };
+            _itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(60));
+            //{
+            //    Полагаемся на стандартно заданное время очистки
+            //    CleanUpPeriod = TimeSpan.FromMinutes(5)
+            //};
 
             cloud.FileUploaded += OnFileUploaded;
 
@@ -40,75 +48,92 @@ namespace YaR.Clouds.Links
         private void OnFileUploaded(IEnumerable<File> files)
         {
             var file = files?.FirstOrDefault();
-            if (null == file) return;
+            if (file is null) return;
 
-            if (file.Path == "/" && file.Name == LinkContainerName && file.Size > 3)
+            if (file.Path == WebDavPath.Root &&
+                file.Name == LinkContainerName &&
+                file.Size > 3)
+            {
                 Load();
+            }
         }
 
         /// <summary>
         /// Сохранить в файл в облаке список ссылок
         /// </summary>
-        public void Save()
+        public async void Save()
         {
-            lock (_lockContainer)
-            {
-                
-                Logger.Info($"Saving links to {LinkContainerName}");
+            Logger.Info($"Saving links to {LinkContainerName}");
 
-                string content = JsonConvert.SerializeObject(_itemList, Formatting.Indented);
-                string path = WebDavPath.Combine(WebDavPath.Root, LinkContainerName);
+            if (await _locker.WaitAsync(SaveAndLoadTimeout))
+            {
                 try
                 {
+                    string content = JsonConvert.SerializeObject(_itemList, Formatting.Indented);
+                    string path = WebDavPath.Combine(WebDavPath.Root, LinkContainerName);
                     _cloud.FileUploaded -= OnFileUploaded;
                     _cloud.UploadFile(path, content);
                 }
                 finally
                 {
                     _cloud.FileUploaded += OnFileUploaded;
+                    _locker.Release();
                 }
+            }
+            else
+            {
+                Logger.Info($"Timeout while saving links to {LinkContainerName}");
             }
         }
 
         /// <summary>
         /// Загрузить из файла в облаке список ссылок
         /// </summary>
-        public void Load()
+        public async void Load()
         {
-
             if (!_cloud.Account.IsAnonymous)
             {
                 Logger.Info($"Loading links from {LinkContainerName}");
 
-                try
+                if (await _locker.WaitAsync(SaveAndLoadTimeout))
                 {
-                    lock (_lockContainer)
+                    try
                     {
-                        //throw new Exception("temp");
-
                         string filepath = WebDavPath.Combine(WebDavPath.Root, LinkContainerName);
-                        var file = (File) _cloud.GetItem(filepath, Cloud.ItemType.File, false);
+                        var file = (File)_cloud.GetItem(filepath, Cloud.ItemType.File, false);
 
-                        if (file != null && file.Size > 3) //some clients put one/two/three-byte file before original file
+                        // If the file is not empty.
+                        // An empty file in UTF-8 with BOM is exactly 3 bytes long.
+                        if (file is not null && file.Size > 3)
                         {
                             _itemList = _cloud.DownloadFileAsJson<ItemList>(file);
                         }
+
+                        _itemList ??= new ItemList();
+
+                        foreach (var f in _itemList.Items)
+                        {
+                            f.MapTo = WebDavPath.Clean(f.MapTo);
+                            if (!f.Href.IsAbsoluteUri)
+                                f.Href = new Uri(_cloud.Repo.PublicBaseUrlDefault + f.Href);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.Warn("Cannot load links", e);
+                    }
+                    finally
+                    {
+                        _locker.Release();
                     }
                 }
-                catch (Exception e)
+                else
                 {
-                    Logger.Warn("Cannot load links", e);
+                    Logger.Info($"Timeout while loading links from {LinkContainerName}");
                 }
             }
 
             _itemList ??= new ItemList();
-
-            foreach (var f in _itemList.Items)
-            {
-                f.MapTo = WebDavPath.Clean(f.MapTo);
-                if (!f.Href.IsAbsoluteUri)
-                    f.Href = new Uri(_cloud.Repo.PublicBaseUrlDefault + f.Href);
-            }
         }
 
         /// <summary>
@@ -137,12 +162,15 @@ namespace YaR.Clouds.Links
 
             var z = _itemList.Items.FirstOrDefault(f => f.MapTo == parent && f.Name == name);
 
-            if (z == null) 
+            if (z is null)
                 return false;
 
             _itemList.Items.Remove(z);
             _itemCache.Invalidate(path, parent);
-            if (doSave) Save();
+
+            if (doSave)
+                Save();
+
             return true;
         }
 
@@ -150,12 +178,15 @@ namespace YaR.Clouds.Links
         {
             bool removed = false;
             var lst = innerLinks.ToList();
+
             foreach (var link in lst)
             {
                 var res = RemoveLink(link.FullPath, false);
                 if (res) removed = true;
             }
-            if (doSave && removed) Save();
+
+            if (doSave && removed)
+                Save();
         }
 
 
@@ -169,16 +200,17 @@ namespace YaR.Clouds.Links
                 .AsParallel()
                 .WithDegreeOfParallelism(5)
                 .Select(it => GetItemLink(WebDavPath.Combine(it.MapTo, it.Name)).Result)
-                .Where(itl => 
-                    itl.IsBad || 
-                    _cloud.GetItemAsync(itl.MapPath, Cloud.ItemType.Folder, false).Result == null)
+                .Where(itl =>
+                    itl.IsBad ||
+                    _cloud.GetItemAsync(itl.MapPath, Cloud.ItemType.Folder, false).Result is null)
                 .ToList();
+
             if (removes.Count == 0)
                 return 0;
 
             _itemList.Items.RemoveAll(it => removes.Any(rem => WebDavPath.PathEquals(rem.MapPath, it.MapTo) && rem.Name == it.Name));
 
-            if (removes.Count == 0) 
+            if (removes.Count == 0)
                 return 0;
 
             if (doWriteHistory)
@@ -212,7 +244,7 @@ namespace YaR.Clouds.Links
         //    try
         //    {
         //        var entry = _cloud.GetItem(path).Result;
-        //        return entry != null;
+        //        return entry is not null;
         //    }
         //    catch (AggregateException e) 
         //    when (  // let's check if there really no file or just other network error
@@ -233,7 +265,7 @@ namespace YaR.Clouds.Links
         public async Task<Link> GetItemLink(string path, bool doResolveType = true)
         {
             var cached = _itemCache.Get(path);
-            if (null != cached)
+            if (cached is not null)
                 return (Link)cached;
 
             //TODO: subject to refact
@@ -245,10 +277,13 @@ namespace YaR.Clouds.Links
                 string name = WebDavPath.Name(parent);
                 parent = WebDavPath.Parent(parent);
                 wp = _itemList.Items.FirstOrDefault(ip => parent == ip.MapTo && name == ip.Name);
-                if (null == wp) right = WebDavPath.Combine(name, right);
-            } while (parent != WebDavPath.Root && null == wp);
+                if (wp is null)
+                    right = WebDavPath.Combine(name, right);
 
-            if (null == wp) return null;
+            } while (parent != WebDavPath.Root && wp is null);
+
+            if (wp is null)
+                return null;
 
             string addhref = string.IsNullOrEmpty(right)
                 ? string.Empty
@@ -372,14 +407,14 @@ namespace YaR.Clouds.Links
             bool changed = false;
             foreach (var link in _itemList.Items)
             {
-                if (!WebDavPath.IsParentOrSame(fullPath, link.MapTo)) 
+                if (!WebDavPath.IsParentOrSame(fullPath, link.MapTo))
                     continue;
 
                 link.MapTo = WebDavPath.ModifyParent(link.MapTo, fullPath, newPath);
                 changed = true;
             }
 
-            if (!changed) 
+            if (!changed)
                 return;
 
             _itemCache.Invalidate(fullPath, newPath);
@@ -392,7 +427,7 @@ namespace YaR.Clouds.Links
             if (!link.IsRoot) return false;
 
             var ilink = _itemList.Items.FirstOrDefault(it => WebDavPath.PathEquals(it.MapTo, link.MapPath) && it.Name == link.Name);
-            if (null == ilink) return false;
+            if (ilink is null) return false;
             if (ilink.Name == newName) return true;
 
             ilink.Name = newName;
@@ -419,7 +454,7 @@ namespace YaR.Clouds.Links
         ///  
         ///  Логика хороша, но
         ///  некоторые клиенты сначала делают структуру каталогов, а потом по одному переносят файлы, например, TotalCommander c плагином WebDAV v.2.9
-        ///  в таких условиях на каждый файл получится свой собственный линк, если делать правильно, т.е. в итоге расплодится миллин линков
+        ///  в таких условиях на каждый файл получится свой собственный линк, если делать правильно, т.е. в итоге расплодится миллион линков
         ///  поэтому делаем неправильно - копируем содержимое линков
         /// </remarks>
         public async Task<bool> RemapLink(Link link, string destinationPath, bool doSave = true)
@@ -430,7 +465,7 @@ namespace YaR.Clouds.Links
             if (link.IsRoot)
             {
                 var rootlink = _itemList.Items.FirstOrDefault(it => WebDavPath.PathEquals(it.MapTo, link.MapPath) && it.Name == link.Name);
-                if (rootlink == null) 
+                if (rootlink is null)
                     return false;
 
                 string oldmap = rootlink.MapTo;
@@ -452,7 +487,7 @@ namespace YaR.Clouds.Links
                 link.Size,
                 DateTime.Now);
 
-            if (!res) 
+            if (!res)
                 return false;
 
             if (doSave) Save();
@@ -460,7 +495,5 @@ namespace YaR.Clouds.Links
 
             return true;
         }
-
-
     }
 }

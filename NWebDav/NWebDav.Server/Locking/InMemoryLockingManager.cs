@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Xml.Linq;
 
 using NWebDav.Server.Stores;
@@ -54,13 +55,16 @@ namespace NWebDav.Server.Locking
 
         private const string TokenScheme = "opaquelocktoken";
 
-        private readonly IDictionary<string, ItemLockTypeDictionary> _itemLocks = new Dictionary<string, ItemLockTypeDictionary>();
+        private readonly IDictionary<string, ItemLockTypeDictionary> _itemLocks =
+            new Dictionary<string, ItemLockTypeDictionary>(StringComparer.InvariantCultureIgnoreCase);
 
         private static readonly LockEntry[] s_supportedLocks =
         {
             new LockEntry(LockScope.Exclusive, LockType.Write),
             new LockEntry(LockScope.Shared, LockType.Write)
         };
+
+        private readonly SemaphoreSlim _locker = new SemaphoreSlim(1);
 
         public LockResult Lock(IStoreItem item, LockType lockType, LockScope lockScope, XElement owner, WebDavUri lockRootUri, bool recursive, IEnumerable<int> timeouts)
         {
@@ -70,7 +74,8 @@ namespace NWebDav.Server.Locking
             // Determine the item's key
             var key = item.UniqueKey;
 
-            lock (_itemLocks)
+            _locker.Wait();
+            try
             {
                 // Make sure the item is in the dictionary
                 if (!_itemLocks.TryGetValue(key, out var itemLockTypeDictionary))
@@ -98,6 +103,10 @@ namespace NWebDav.Server.Locking
                 // Return the active lock
                 return new LockResult(DavStatusCode.Ok, GetActiveLockInfo(itemLockInfo));
             }
+            finally
+            {
+                _locker.Release();
+            }
         }
 
         public DavStatusCode Unlock(IStoreItem item, WebDavUri lockTokenUri)
@@ -110,7 +119,8 @@ namespace NWebDav.Server.Locking
             // Determine the item's key
             var key = item.UniqueKey;
 
-            lock (_itemLocks)
+            _locker.Wait();
+            try
             {
                 // Make sure the item is in the dictionary
                 if (!_itemLocks.TryGetValue(key, out var itemLockTypeDictionary))
@@ -146,6 +156,10 @@ namespace NWebDav.Server.Locking
                     }
                 }
             }
+            finally
+            {
+                _locker.Release();
+            }
 
             // Item cannot be unlocked (token cannot be found)
             return DavStatusCode.PreconditionFailed;
@@ -161,7 +175,8 @@ namespace NWebDav.Server.Locking
             // Determine the item's key
             var key = item.UniqueKey;
 
-            lock (_itemLocks)
+            _locker.Wait();
+            try
             {
                 // Make sure the item is in the dictionary
                 if (!_itemLocks.TryGetValue(key, out var itemLockTypeDictionary))
@@ -183,6 +198,10 @@ namespace NWebDav.Server.Locking
                     }
                 }
             }
+            finally
+            {
+                _locker.Release();
+            }
 
             // Item cannot be unlocked (token cannot be found)
             return new LockResult(DavStatusCode.PreconditionFailed);
@@ -193,7 +212,8 @@ namespace NWebDav.Server.Locking
             // Determine the item's key
             var key = item.UniqueKey;
 
-            lock (_itemLocks)
+            _locker.Wait();
+            try
             {
                 // Make sure the item is in the dictionary
                 if (!_itemLocks.TryGetValue(key, out var itemLockTypeDictionary))
@@ -201,6 +221,10 @@ namespace NWebDav.Server.Locking
 
                 // Return all non-expired locks
                 return itemLockTypeDictionary.SelectMany(kv => kv.Value).Where(l => !l.IsExpired).Select(GetActiveLockInfo).ToList();
+            }
+            finally
+            {
+                _locker.Release();
             }
         }
 
@@ -215,7 +239,8 @@ namespace NWebDav.Server.Locking
             // Determine the item's key
             var key = item.UniqueKey;
 
-            lock (_itemLocks)
+            _locker.Wait();
+            try
             {
                 // Make sure the item is in the dictionary
                 if (_itemLocks.TryGetValue(key, out var itemLockTypeDictionary))
@@ -226,6 +251,10 @@ namespace NWebDav.Server.Locking
                             return true;
                     }
                 }
+            }
+            finally
+            {
+                _locker.Release();
             }
 
             // No lock
@@ -246,7 +275,8 @@ namespace NWebDav.Server.Locking
             if (lockToken == null)
                 return false;
 
-            lock (_itemLocks)
+            _locker.Wait();
+            try
             {
                 // Make sure the item is in the dictionary
                 if (!_itemLocks.TryGetValue(key, out var itemLockTypeDictionary))
@@ -260,6 +290,10 @@ namespace NWebDav.Server.Locking
                     if (itemLockInfo != null)
                         return true;
                 }
+            }
+            finally
+            {
+                _locker.Release();
             }
 
             // No lock

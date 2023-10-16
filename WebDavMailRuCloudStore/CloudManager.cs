@@ -1,6 +1,8 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Principal;
+using System.Threading;
 using YaR.Clouds.Base;
 
 namespace YaR.Clouds.WebDavStore
@@ -9,33 +11,37 @@ namespace YaR.Clouds.WebDavStore
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(CloudManager));
 
-        private static readonly ConcurrentDictionary<string, Cloud> CloudCache = new();
+        private static readonly ConcurrentDictionary<string, Cloud> CloudCache = new(StringComparer.InvariantCultureIgnoreCase);
 
         public static CloudSettings Settings { get; set; }
 
-        public static Cloud Instance(IIdentity identityi)
+        private static SemaphoreSlim _locker = new SemaphoreSlim(1);
+
+        public static Cloud Instance(IIdentity identity)
         {
-            var identity = (HttpListenerBasicIdentity) identityi;
-            string key = identity.Name + identity.Password;
+            var basicIdentity = (HttpListenerBasicIdentity) identity;
+            string key = basicIdentity.Name + basicIdentity.Password;
 
             if (CloudCache.TryGetValue(key, out var cloud))
                 return cloud;
 
-            lock (Locker)
+            _locker.Wait();
+            try
             {
-                if (CloudCache.TryGetValue(key, out cloud)) 
+                if (CloudCache.TryGetValue(key, out cloud))
                     return cloud;
 
-                cloud = CreateCloud(identity);
+                cloud = CreateCloud(basicIdentity);
 
-                if (!CloudCache.TryAdd(key, cloud))
-                    CloudCache.TryGetValue(key, out cloud);
+                CloudCache.TryAdd(key, cloud);
+            }
+            finally
+            {
+                _locker.Release();
             }
 
             return cloud;
         }
-
-        private static readonly object Locker = new();
 
         private static Cloud CreateCloud(HttpListenerBasicIdentity identity)
         {

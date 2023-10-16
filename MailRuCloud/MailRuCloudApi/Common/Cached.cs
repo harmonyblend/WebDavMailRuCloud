@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 
 namespace YaR.Clouds.Common
 {
@@ -26,25 +27,30 @@ namespace YaR.Clouds.Common
             RefreshValueIfNeeded();
         }
 
-        private readonly object _refreshLock = new();
+        private readonly SemaphoreSlim _locker = new SemaphoreSlim(1);
 
         private void RefreshValueIfNeeded()
         {
-            if (DateTime.Now < _expiration) 
+            if (DateTime.Now < _expiration)
                 return;
 
-            lock (_refreshLock)
+            _locker.Wait();
+            try
             {
-                if (DateTime.Now < _expiration) 
+                if (DateTime.Now < _expiration)
                     return;
 
-                T oldValue =  _value is { IsValueCreated: true } ? _value.Value : default;
+                T oldValue = _value is { IsValueCreated: true } ? _value.Value : default;
                 _value = new Lazy<T>(() => _valueFactory(oldValue));
 
                 var duration = _duration(_value.Value);
-                _expiration = duration == TimeSpan.MaxValue 
+                _expiration = duration == TimeSpan.MaxValue
                     ? DateTime.MaxValue
                     : DateTime.Now.Add(duration);
+            }
+            finally
+            {
+                _locker.Release();
             }
         }
 
@@ -55,9 +61,14 @@ namespace YaR.Clouds.Common
 
         public void Expire()
         {
-            lock (_refreshLock)
+            _locker.Wait();
+            try
             {
                 _expiration = DateTime.MinValue;
+            }
+            finally
+            {
+                _locker.Release();
             }
         }
     }

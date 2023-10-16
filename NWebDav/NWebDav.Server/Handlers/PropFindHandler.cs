@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -62,6 +63,8 @@ namespace NWebDav.Server.Handlers
         /// </returns>
         public async Task<bool> HandleRequestAsync(IHttpContext httpContext, IStore store)
         {
+            var prepareWatch = Stopwatch.StartNew();
+
             // Obtain request and response
             var request = httpContext.Request;
             var response = httpContext.Response;
@@ -113,13 +116,20 @@ namespace NWebDav.Server.Handlers
                     break;
             }
 
+            prepareWatch.Stop();
+#if DEBUG
+            s_log.Log(LogLevel.Warning, () => $"Prepare for XML generation {prepareWatch.ElapsedMilliseconds} ms");
+#else
+            s_log.Log(LogLevel.Debug, () => $"Prepare for XML generation {prepareWatch.ElapsedMilliseconds} ms");
+#endif
+
             var sw = Stopwatch.StartNew();
 
-                // Obtain the status document
+            // Obtain the status document
             var xMultiStatus = new XElement(WebDavNamespaces.DavNsMultiStatus);
             var xDocument = new XDocument(xMultiStatus);
 
-            object locker = new object();
+            SemaphoreSlim locker = new SemaphoreSlim(1);
             var degree = Environment.ProcessorCount > 1 && entries.Count > 5_000 ? Environment.ProcessorCount - 1 : 1;
 
             // Add all the properties
@@ -151,7 +161,7 @@ namespace NWebDav.Server.Handlers
 
                     // Check if the entry supports properties
                     var propertyManager = entry.Entry.PropertyManager;
-                    if (propertyManager != null)
+                    if (propertyManager is not null)
                     {
                         // Handle based on the property mode
                         if (propertyMode == PropertyMode.PropertyNames)
@@ -187,16 +197,25 @@ namespace NWebDav.Server.Handlers
                     // Add the status
                     xPropStatValues.Add(new XElement(WebDavNamespaces.DavNsStatus, "HTTP/1.1 200 OK"));
 
-                    lock (locker)
+                    await locker.WaitAsync().ConfigureAwait(false);
+                    try
                     {
                         // Add the property
                         xMultiStatus.Add(xResponse);
                     }
-
+                    finally
+                    {
+                        locker.Release();
+                    }
                 });
 
             var elapsed = sw.ElapsedMilliseconds;
+#if DEBUG
+            s_log.Log(LogLevel.Warning, () => $"Response XML generation {elapsed} ms");
+#else
             s_log.Log(LogLevel.Debug, () => $"Response XML generation {elapsed} ms");
+#endif
+
 
             // Stream the document
             await response.SendResponseAsync(DavStatusCode.MultiStatus, xDocument).ConfigureAwait(false);

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace YaR.Clouds.Common
 {
@@ -16,33 +17,40 @@ namespace YaR.Clouds.Common
             _valueFactory = valueFactory;
         }
 
-        private readonly object _lock = new();
+        private readonly SemaphoreSlim _locker = new SemaphoreSlim(1);
 
         public T Next(T current)
         {
-            lock (_lock)
+            _locker.Wait();
+            try
             {
-                var item = null == current
+                var item = current is null
                     ? _items.FirstOrDefault(it => it.LockCount < _maxLocks)
                     : _items.SkipWhile(it => !it.Equals(current)).Skip(1).FirstOrDefault(it => it.LockCount < _maxLocks);
 
-                if (null == item)
-                    _items.Add(item = new PendingItem <T>{Item = _valueFactory(), LockCount = 0});
+                if (item is null)
+                    _items.Add(item = new PendingItem<T> { Item = _valueFactory(), LockCount = 0 });
 
                 item.LockCount++;
 
                 return item.Item;
             }
+            finally
+            {
+                _locker.Release();
+            }
         }
 
         public void Free(T value)
         {
-            if (null == value)
+            if (value is null)
                 return;
 
-            lock (_lock)
+            _locker.Wait();
+            try
             {
                 foreach (var item in _items)
+                {
                     if (item.Item.Equals(value))
                     {
                         switch (item.LockCount)
@@ -54,12 +62,13 @@ namespace YaR.Clouds.Common
                                 break;
                         }
                     }
+                }
+            }
+            finally
+            {
+                _locker.Release();
             }
         }
-
-
-
-        
     }
 
     class PendingItem<T>
