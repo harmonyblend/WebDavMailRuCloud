@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Authentication;
-using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.Types;
 using YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models;
 using YaR.Clouds.Base.Requests.Types;
 
@@ -84,7 +83,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
         public static File ToFile(this YadItemInfoRequestData data)
         {
-            var path = data.Path.Remove(0, 5); // remove "/disk"
+            var path = data.Path.Remove(0, "/disk".Length);
 
             var res = new File(path, data.Meta.Size)
             {

@@ -49,9 +49,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
             return this;
         }
 
-        protected override string RelationalUri => "/models/?_m=" + _postData.Models
-                                                       .Select(m => m.Name)
-                                                       .Aggregate((current, next) => current + "," + next);
+        protected override string RelationalUri
+            => string.Concat("/models/?_m=", _postData.Models
+                                                      .Select(m => m.Name)
+                                                      .Aggregate((current, next) => current + "," + next));
 
         protected override RequestResponse<YadResponseResult> DeserializeMessage(
             NameValueCollection responseHeaders, System.IO.Stream stream)
