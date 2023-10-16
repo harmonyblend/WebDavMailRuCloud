@@ -35,18 +35,23 @@ namespace YaR.Clouds.Base.Requests
             //var udriz = new Uri(new Uri(domain), RelationalUri, true);
 
 #pragma warning disable SYSLIB0014 // Type or member is obsolete
-            var request = (HttpWebRequest)WebRequest.Create(uriz);
+            var request = WebRequest.CreateHttp(uriz);
 #pragma warning restore SYSLIB0014 // Type or member is obsolete
+            request.Host = uriz.Host;
             request.Proxy = Settings.Proxy;
             request.CookieContainer = Auth?.Cookies;
             request.Method = "GET";
             request.ContentType = ConstSettings.DefaultRequestType;
             request.Accept = "application/json";
             request.UserAgent = Settings.UserAgent;
-            request.ContinueTimeout = Settings.CloudSettings.Wait100ContinueTimeoutMs;
-            request.Timeout = Settings.CloudSettings.WaitResponseTimeoutMs;
-            request.ReadWriteTimeout = Settings.CloudSettings.ReadWriteTimeoutMs;
-
+            request.ContinueTimeout = Settings.CloudSettings.Wait100ContinueTimeoutSec;
+            request.Timeout = Settings.CloudSettings.WaitResponseTimeoutSec;
+            request.ReadWriteTimeout = Settings.CloudSettings.ReadWriteTimeoutSec;
+            request.AllowWriteStreamBuffering = false;
+            request.AllowReadStreamBuffering = true;
+            request.SendChunked = false;
+            request.ServicePoint.Expect100Continue = false;
+            request.KeepAlive = true;
 
 #if NET48
             request.AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip;
@@ -65,77 +70,151 @@ namespace YaR.Clouds.Base.Requests
         }
 
 
+        private const int MaxRetryCount = 10;
+
         public virtual async Task<T> MakeRequestAsync()
         {
-            Stopwatch watch = new Stopwatch();
-            watch.Start();
+            /*
+             * По всей видимости, при нескольких последовательных обращениях к серверу
+             * инфраструктура .NET повторно использует подключение после его закрытие по Close.
+             * По этой причине может получиться так, что поток, который предназначен для чтения
+             * данных с сервера, читает до того, как данные отправлены на сервер (как вариант),
+             * или (как вариант) до того, как сервер начал отправку данных клиенту.
+             * В таком случае поток читает 0 байт и выдает ошибку
+             * throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
+             * см. код сборки .NET здесь:
+             * https://github.com/dotnet/runtime/blob/139f45e56b85b7e643d7e4f81cb5cdf640cd9021/src/libraries/System.Net.Http/src/System/Net/Http/SocketsHttpHandler/HttpConnection.cs#L625
+             * Судя по сообщениям в интернете, такое поведение многим не нравится, но ситуация не исправляется.
+             * Учитывая, что рядом с исключением устанавливается _canRetry = true,
+             * можно предположить, что предполагается повторение обращения к серверу,
+             * что мы тут и сделаем.
+             */
 
-            var httpRequest = CreateRequest();
-
-            var content = CreateHttpContent();
-            if (content != null)
+            Stopwatch totalWatch = Stopwatch.StartNew();
+            int retry = MaxRetryCount;
+            while (true)
             {
-                httpRequest.Method = "POST";
-                httpRequest.AllowWriteStreamBuffering = false;
-                using Stream requestStream = await httpRequest.GetRequestStreamAsync().ConfigureAwait(false);
-                /*
-                 * The debug add the following to a watch list:
-                 *      System.Text.Encoding.UTF8.GetString(content)
-                 */
+                retry--;
+                bool isRetryState = false;
+                Stopwatch watch = Stopwatch.StartNew();
+                HttpWebRequest httpRequest = null;
+
+                try
+                {
+                    httpRequest = CreateRequest();
+
+                    var requestContent = CreateHttpContent();
+                    if (requestContent != null)
+                    {
+                        httpRequest.Method = "POST";
+                        using Stream requestStream = await httpRequest.GetRequestStreamAsync().ConfigureAwait(false);
+
+                        /*
+                         * The debug add the following to a watch list:
+                         *      System.Text.Encoding.UTF8.GetString(content)
+                         */
 #if NET48
-                await requestStream.WriteAsync(content, 0, content.Length).ConfigureAwait(false);
+                        await requestStream.WriteAsync(requestContent, 0, requestContent.Length).ConfigureAwait(false);
 #else
-                await requestStream.WriteAsync(content).ConfigureAwait(false);
+                        await requestStream.WriteAsync(requestContent).ConfigureAwait(false);
 #endif
-                await requestStream.FlushAsync().ConfigureAwait(false);
-                requestStream.Close();
-            }
-            try
-            {
-                using var response = (HttpWebResponse)await httpRequest.GetResponseAsync().ConfigureAwait(false);
+                        await requestStream.FlushAsync().ConfigureAwait(false);
+                        requestStream.Close();
+                    }
 
-                if ((int)response.StatusCode >= 500)
-                {
-                    throw new RequestException("Server fault")
+                    /*
+                     * Здесь в методе GetResponseAsync() иногда происходит исключение
+                     * throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
+                     * Мы его отлавливаем и повторяем обращение к серверу.
+                     */
+                    using var response = (HttpWebResponse)await httpRequest.GetResponseAsync().ConfigureAwait(false);
+
+                    if ((int)response.StatusCode >= 500)
                     {
-                        StatusCode = response.StatusCode
-                    };
-                }
+                        throw new RequestException("Server fault")
+                        {
+                            StatusCode = response.StatusCode
+                        };
+                    }
 
-                RequestResponse<T> result;
-                using (var responseStream = response.GetResponseStream())
-                {
-                    result = DeserializeMessage(response.Headers, Transport(responseStream));
-                    responseStream.Close();
-                }
-
-                if (!result.Ok || response.StatusCode != HttpStatusCode.OK)
-                {
-                    var exceptionMessage =
-                        $"Request failed (status code {(int)response.StatusCode}): {result.Description}";
-                    throw new RequestException(exceptionMessage)
+                    RequestResponse<T> result;
+                    using (var responseStream = response.GetResponseStream())
                     {
-                        StatusCode = response.StatusCode,
-                        ResponseBody = string.Empty,
-                        Description = result.Description,
-                        ErrorCode = result.ErrorCode
-                    };
-                }
-                var retVal = result.Result;
+                        result = DeserializeMessage(response.Headers, Transport(responseStream));
+                        responseStream.Close();
+                    }
 
-                return retVal;
-            }
-            // ReSharper disable once RedundantCatchClause
+                    if (!result.Ok || response.StatusCode != HttpStatusCode.OK)
+                    {
+                        var exceptionMessage =
+                            $"Request failed (status code {(int)response.StatusCode}): {result.Description}";
+                        throw new RequestException(exceptionMessage)
+                        {
+                            StatusCode = response.StatusCode,
+                            ResponseBody = string.Empty,
+                            Description = result.Description,
+                            ErrorCode = result.ErrorCode
+                        };
+                    }
+
+                    response.Close();
+
+                    return result.Result;
+                }
+                catch (WebException iex2) when (iex2?.InnerException is System.Net.Http.HttpRequestException iex1 &&
+                                                iex1?.InnerException is IOException iex)
+                {
+                    /*
+                     * Здесь мы ловим ошибку
+                     * throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof),
+                     * которая здесь выглядит следующим образом:
+                     * System.AggregateException: One or more errors occurred. (An error occurred while sending the request.)
+                     *  ---> System.Net.WebException: An error occurred while sending the request.
+                     *  ---> System.Net.Http.HttpRequestException: An error occurred while sending the request.
+                     *  ---> System.IO.IOException: The response ended prematurely.
+                     *         at System.Net.Http.HttpConnection.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+                     *  --- End of inner exception stack trace ---
+                     */
+                    if (retry <= 0)
+                    {
+                        string msg = "The response ended prematurely, retry count completed";
+#if DEBUG
+                        Logger.Warn(msg);
+#else
+                        Logger.Debug(msg);
+#endif
+                        throw;
+                    }
+                    else
+                    {
+                        isRetryState = true;
+                        string msg = "The response ended prematurely, retrying...";
+#if DEBUG
+                        Logger.Warn(msg);
+#else
+                        Logger.Debug(msg);
+#endif
+                    }
+                }
+                // ReSharper disable once RedundantCatchClause
 #pragma warning disable 168
-            catch (Exception ex)
+                catch (Exception ex)
 #pragma warning restore 168
-            {
-                throw;
-            }
-            finally
-            {
-                watch.Stop();
-                Logger.Debug($"HTTP:{httpRequest.Method}:{httpRequest.RequestUri.AbsoluteUri} ({watch.Elapsed.Milliseconds} ms)");
+                {
+                    throw;
+                }
+                finally
+                {
+                    watch.Stop();
+                    string totalText = null;
+                    if (!isRetryState && retry < MaxRetryCount - 1)
+                    {
+                        totalWatch.Stop();
+                        totalText = $"({totalWatch.Elapsed.Milliseconds} ms of {MaxRetryCount - retry} retry laps)";
+                    }
+                    Logger.Debug($"HTTP:{httpRequest.Method}:{httpRequest.RequestUri.AbsoluteUri} " +
+                        $"({watch.Elapsed.Milliseconds} ms){(isRetryState ? ", retrying" : totalText)}");
+                }
             }
         }
 
