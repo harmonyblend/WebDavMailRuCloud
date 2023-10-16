@@ -72,13 +72,13 @@ namespace YaR.Clouds.Console
         [Option("disable-links", Required = false, Default = false, HelpText = "Disable support for shared folder and stop using /item.links.wdmrc")]
         public bool DisableLinkManager { get; set; }
 
-        [Option("100-continue-timeout-ms", Required = false, Default = 350, HelpText = "Timeout in milliseconds, to wait until the 100-Continue is received")]
-        public int Wait100ContinueTimeoutMs { get; set; }
+        [Option("100-continue-timeout-sec", Required = false, Default = 1, HelpText = "Timeout in seconds, to wait until the 100-Continue is received")]
+        public int Wait100ContinueTimeoutSec { get; set; }
 
-        [Option("response-timeout-ms", Required = false, Default = 100_000, HelpText = "Timeout in milliseconds, to wait until 1-st byte from server is received")]
-        public int WaitResponseTimeoutMs { get; set; }
+        [Option("response-timeout-sec", Required = false, Default = 100, HelpText = "Timeout in seconds, to wait until 1-st byte from server is received")]
+        public int WaitResponseTimeoutSec { get; set; }
 
-        [Option("read-write-timeout-ms", Required = false, Default = 300_000, HelpText = "Timeout in milliseconds, the maximum duration of read or write operation")]
-        public int ReadWriteTimeoutMs { get; set; }
+        [Option("read-write-timeout-sec", Required = false, Default = 300, HelpText = "Timeout in seconds, the maximum duration of read or write operation")]
+        public int ReadWriteTimeoutSec { get; set; }
     }
 }

@@ -36,9 +36,9 @@ namespace YaR.Clouds
 
         public bool DisableLinkManager { get; set; }
 
-        public int Wait100ContinueTimeoutMs { get; set; }
-        public int WaitResponseTimeoutMs { get; set; }
-        public int ReadWriteTimeoutMs { get; set; }
+        public int Wait100ContinueTimeoutSec { get; set; }
+        public int WaitResponseTimeoutSec { get; set; }
+        public int ReadWriteTimeoutSec { get; set; }
 
         #region BrowserAuthenticator
 

@@ -61,9 +61,9 @@ namespace YaR.Clouds.Console
 
                 DisableLinkManager = options.DisableLinkManager,
 
-                Wait100ContinueTimeoutMs = options.Wait100ContinueTimeoutMs,
-                WaitResponseTimeoutMs = options.WaitResponseTimeoutMs,
-                ReadWriteTimeoutMs = options.ReadWriteTimeoutMs,
+                Wait100ContinueTimeoutSec = options.Wait100ContinueTimeoutSec,
+                WaitResponseTimeoutSec = options.WaitResponseTimeoutSec,
+                ReadWriteTimeoutSec = options.ReadWriteTimeoutSec,
 
                 BrowserAuthenticatorUrl = Config.BrowserAuthenticator?.Url,
                 BrowserAuthenticatorPassword = Config.BrowserAuthenticator?.Password,
@@ -213,6 +213,9 @@ namespace YaR.Clouds.Console
             Logger.Info($"Version: {version}");
             Logger.Info($"Using proxy: {options.ProxyAddress}");
             Logger.Info($"Max threads count: {options.MaxThreadCount}");
+            Logger.Info($"Cloud server response timeout: {options.WaitResponseTimeoutSec} sec");
+            Logger.Info($"Cloud download/upload timeout: {options.ReadWriteTimeoutSec} sec");
+            Logger.Info($"Wait for 100-Continue timeout: {options.Wait100ContinueTimeoutSec} sec");
             Logger.Info($"Cloud protocol: {options.Protocol}");
             Logger.Info($"Cache listings, sec: {options.CacheListingSec}");
             Logger.Info($"List query folder depth: {options.CacheListingDepth}");

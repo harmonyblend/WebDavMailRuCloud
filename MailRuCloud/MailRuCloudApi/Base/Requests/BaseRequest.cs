@@ -44,9 +44,9 @@ namespace YaR.Clouds.Base.Requests
             request.ContentType = ConstSettings.DefaultRequestType;
             request.Accept = "application/json";
             request.UserAgent = Settings.UserAgent;
-            request.ContinueTimeout = Settings.CloudSettings.Wait100ContinueTimeoutSec;
-            request.Timeout = Settings.CloudSettings.WaitResponseTimeoutSec;
-            request.ReadWriteTimeout = Settings.CloudSettings.ReadWriteTimeoutSec;
+            request.ContinueTimeout = Settings.CloudSettings.Wait100ContinueTimeoutSec * 1000;
+            request.Timeout = Settings.CloudSettings.WaitResponseTimeoutSec * 1000;
+            request.ReadWriteTimeout = Settings.CloudSettings.ReadWriteTimeoutSec * 1000;
             request.AllowWriteStreamBuffering = false;
             request.AllowReadStreamBuffering = true;
             request.SendChunked = false;
