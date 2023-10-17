@@ -116,7 +116,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
             if (!IsWritable)
                 return Task.FromResult(new StoreItemResult(DavStatusCode.PreconditionFailed));
 
-            var destinationPath = FullPath + "/" + name;
+            var destinationPath = string.Concat(FullPath, "/", name);
 
             var size = httpContext.Request.ContentLength();
 

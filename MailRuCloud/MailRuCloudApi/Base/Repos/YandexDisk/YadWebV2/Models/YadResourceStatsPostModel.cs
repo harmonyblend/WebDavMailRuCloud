@@ -28,6 +28,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
 
     class YadResourceStatsRequestData : YadModelDataBase
     {
+        /// <summary>
+        /// Здесь количество файлов, только файлов, не директорий, на всех уровнях вложенности.
+        /// </summary>
         [JsonProperty("files_count")]
         public long FilesCount { get; set; }
 

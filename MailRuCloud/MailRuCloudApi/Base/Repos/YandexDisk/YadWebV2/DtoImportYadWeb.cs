@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Authentication;
 using YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models;
@@ -33,34 +33,71 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
             return res;
         }
 
-        public static IEntry ToFolder(this YadFolderInfoRequestData data,
-            YadItemInfoRequestData itemInfo, YadResourceStatsRequestData resStats, string path)
+        public static Folder ToFolder(this YadFolderInfoRequestData folderData,
+            YadItemInfoRequestData entryData, YadResourceStatsRequestData entryStats, string path)
         {
-            var fi = data.Resources;
+            if (folderData is null)
+                throw new ArgumentNullException(nameof(folderData));
 
-            var res = new Folder(resStats?.Size ?? itemInfo?.Meta?.Size ?? 0, path) { IsChildrenLoaded = true };
-            if (!string.IsNullOrEmpty(itemInfo?.Meta?.UrlShort))
+            if (path.StartsWith("/disk"))
+                path = path.Remove(0, "/disk".Length);
+
+            var folder = new Folder(entryStats?.Size ?? entryData?.Meta?.Size ?? 0, path) { IsChildrenLoaded = true };
+            if (!string.IsNullOrEmpty(entryData?.Meta?.UrlShort))
             {
-                PublicLinkInfo item = new PublicLinkInfo("short", itemInfo.Meta.UrlShort);
-                res.PublicLinks.TryAdd(item.Uri.AbsoluteUri, item);
+                PublicLinkInfo item = new PublicLinkInfo("short", entryData.Meta.UrlShort);
+                folder.PublicLinks.TryAdd(item.Uri.AbsoluteUri, item);
             }
 
-            res.Files = new ConcurrentDictionary<string, File>(
-                fi
-                    .Where(it => it.Type == "file")
-                    .Select(f => f.ToFile())
-                    .ToGroupedFiles()
-                    .Select(item => new KeyValuePair<string, File>(item.FullPath, item)),
+            string diskPath = WebDavPath.Combine("/disk", path);
+            var fi = folderData.Resources;
+
+            folder.Files = new ConcurrentDictionary<string, File>(
+                fi.Where(it => it.Type == "file")
+                  .Select(f => f.ToFile())
+                  .ToGroupedFiles()
+                  .Select(f => new System.Collections.Generic.KeyValuePair<string, File>(f.FullPath, f)),
+                StringComparer.InvariantCultureIgnoreCase);
+            folder.Folders = new ConcurrentDictionary<string, Folder>(
+                fi.Where(it => it.Type == "dir" &&
+                               // Пропуск элемента с информацией папки о родительской папке,
+                               // этот элемент добавляется в выборки, если читается
+                               // не всё содержимое папки, а делается только вырезка
+                               it.Path != diskPath)
+                  .Select(f => f.ToFolder())
+                  .Select(f => new System.Collections.Generic.KeyValuePair<string, Folder>(f.FullPath, f)),
                 StringComparer.InvariantCultureIgnoreCase);
 
-            res.Folders = new ConcurrentDictionary<string, Folder>(
-               fi
-                    .Where(it => it.Type == "dir")
-                    .Select(f => f.ToFolder())
-                    .Select(item => new KeyValuePair<string, Folder>(item.FullPath, item)),
-                StringComparer.InvariantCultureIgnoreCase);
+            return folder;
+        }
 
-            return res;
+        public static Folder MergeData(this Folder folder, YadFolderInfoRequestData folderData, string path)
+        {
+            if (folderData is null)
+                throw new ArgumentNullException(nameof(folderData));
+            if (folder is null)
+                throw new ArgumentNullException(nameof(folder));
+
+            string diskPath = WebDavPath.Combine("/disk", path);
+            var fi = folderData.Resources;
+
+            foreach (var item in fi.Where(it => it.Type == "file")
+                                   .Select(f => f.ToFile())
+                                   .ToGroupedFiles())
+            {
+                folder.Files.AddOrUpdate(item.FullPath, item, (_, _) => item);
+            }
+            foreach (var item in fi.Where(it => it.Type == "dir" &&
+                                                // Пропуск элемента с информацией папки о родительской папке,
+                                                // этот элемент добавляется в выборки, если читается
+                                                // не всё содержимое папки, а делается только вырезка
+                                                it.Path != diskPath)
+                                   .Select(f => f.ToFolder()))
+            {
+                folder.Folders.AddOrUpdate(item.FullPath, item, (_, _) => item);
+            }
+
+            return folder;
         }
 
         public static File ToFile(this FolderInfoDataResource data)
@@ -116,7 +153,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
         {
             var res = new RenameResult
             {
-                IsSuccess = null == data.Data.Error ,
+                IsSuccess = null == data.Data.Error,
                 DateTime = DateTime.Now,
                 Path = data.Params.Src.Remove(0, "/disk".Length)
             };

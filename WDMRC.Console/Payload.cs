@@ -83,8 +83,9 @@ namespace YaR.Clouds.Console
 		        httpListener.AuthenticationSchemes = httpListenerOptions.AuthenticationScheme;
 		        httpListener.Start();
 
-		        Logger.Info(
-			        $"WebDAV server running at {httpListenerOptions.Prefixes.Aggregate((current, next) => current + ", " + next)}");
+                Logger.Info(
+                    $"WebDAV server running at {httpListenerOptions.Prefixes.Aggregate(
+                        (current, next) => string.Concat(current, ", ", next))}");
 
 		        // Start dispatching requests
 		        var t = DispatchHttpRequestsAsync(httpListener, options.MaxThreadCount);
@@ -250,8 +251,8 @@ namespace YaR.Clouds.Console
 
             // detect .NET Mono
             Type type = Type.GetType("Mono.Runtime");
-            if (type == null) 
-                return ".NET Framework " + Environment.Version;
+            if (type == null)
+                return string.Concat(".NET Framework ", Environment.Version);
 
             MethodInfo displayName = type.GetMethod("GetDisplayName", BindingFlags.NonPublic | BindingFlags.Static);
             return displayName != null

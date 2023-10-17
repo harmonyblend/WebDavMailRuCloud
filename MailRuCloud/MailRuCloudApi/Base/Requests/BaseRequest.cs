@@ -3,6 +3,8 @@ using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using YaR.Clouds.Base.Repos;
 using YaR.Clouds.Base.Repos.MailRuCloud;
@@ -194,6 +196,43 @@ namespace YaR.Clouds.Base.Requests
 #else
                         Logger.Debug(msg);
 #endif
+                    }
+                }
+                catch (WebException iex2) when (iex2?.InnerException is System.Net.Http.HttpRequestException iex1 &&
+                                                iex1?.InnerException is SocketException iex)
+                {
+                    /*
+                     * Здесь мы ловим ошибку
+                     * SocketException: Попытка установить соединение была безуспешной,
+                     * т.к. от другого компьютера за требуемое время не получен нужный отклик,
+                     * или было разорвано уже установленное соединение из-за неверного отклика
+                     * уже подключенного компьютера.
+                     * 
+                     * Возможно превышено максимальное количество подключений к серверу.
+                     * Просто повторяем запрос после небольшого ожидания.
+                     */
+                    if (retry <= 0)
+                    {
+                        string msg = "Can not connect to server. Increase timeout in response-timeout-sec parameter.";
+#if DEBUG
+                        Logger.Warn(msg);
+#else
+                        Logger.Debug(msg);
+#endif
+                        throw;
+                    }
+                    else
+                    {
+                        isRetryState = true;
+                        string msg = watch.ElapsedMilliseconds < 1000
+                            ? "Connection to server terminated immediately, retrying after couple of seconds..."
+                            : $"Connection lost after {watch.ElapsedMilliseconds/1000} seconds, retrying after couple of seconds...";
+#if DEBUG
+                        Logger.Warn(msg);
+#else
+                        Logger.Debug(msg);
+#endif
+                        Thread.Sleep(TimeSpan.FromSeconds(2));
                     }
                 }
                 // ReSharper disable once RedundantCatchClause

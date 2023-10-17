@@ -30,6 +30,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
         public string SortBy { get; set; } = "name";
         public int Offset { get; set; } = 0;
         public int Amount { get; set; } = int.MaxValue;
+        public bool WithParent { get; set; } = false;
 
         public override IEnumerable<KeyValuePair<string, string>> ToKvp(int index)
         {
@@ -49,8 +50,13 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
 
             yield return new KeyValuePair<string, string>($"order.{index}", Order.ToString());
             yield return new KeyValuePair<string, string>($"sort.{index}", SortBy);
-            yield return new KeyValuePair<string, string>($"offset.{index}", Offset.ToString());
-            yield return new KeyValuePair<string, string>($"amount.{index}", Amount.ToString());
+            if (Offset > 0 || Amount < int.MaxValue)
+            {
+                yield return new KeyValuePair<string, string>($"offset.{index}", Offset.ToString());
+                yield return new KeyValuePair<string, string>($"amount.{index}", Amount.ToString());
+            }
+            if (WithParent)
+                yield return new KeyValuePair<string, string>($"withParent.{index}", "1");
         }
     }
 
@@ -124,6 +130,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
 
         [JsonProperty("short_url")]
         public string UrlShort { get; set; }
+
+        [JsonProperty("total_results_count")]
+        public int? TotalEntityCount { get; set; }
     }
 
     class Size

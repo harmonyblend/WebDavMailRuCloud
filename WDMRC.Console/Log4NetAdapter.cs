@@ -37,7 +37,7 @@ namespace YaR.Clouds.Console
                 }
                 catch (Exception e)
                 {
-                    msg = "Failed to get error message: " + e.Message;
+                    msg = string.Concat("Failed to get error message: ", e.Message);
                 }
 
                 Log(logLevel, msg, exception);

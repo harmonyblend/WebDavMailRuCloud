@@ -62,7 +62,7 @@ namespace WinServiceInstaller
 
             string cmd = Assembly.Location;
             if(!string.IsNullOrWhiteSpace(CommandLine))
-                cmd += " " + CommandLine;
+                cmd = string.Concat(cmd, " ", CommandLine);
             SetCommandLine(cmd);
 #endif
 #if NET7_0_WINDOWS

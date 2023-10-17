@@ -94,10 +94,13 @@ namespace YaR.Clouds
         ///// <returns>List of the items.</returns>
         public virtual async Task<IEntry> GetItemAsync(string path, ItemType itemType = ItemType.Unknown, bool resolveLinks = true)
         {
-            //TODO: вообще, всё плохо стало, всё запуталось, всё надо переписать
-            var uriMatch = Regex.Match(path, @"\A/(?<uri>https://cloud\.mail\.\w+/public/\S+/\S+(/.*)?)\Z");
-            if (uriMatch.Success)
-                return await GetPublicItemAsync(new Uri(uriMatch.Groups["uri"].Value, UriKind.Absolute), itemType);
+            if (Settings.Protocol == Protocol.WebM1Bin || Settings.Protocol == Protocol.WebV2)
+            {
+                //TODO: вообще, всё плохо стало, всё запуталось, всё надо переписать
+                var uriMatch = Regex.Match(path, @"\A/(?<uri>https://cloud\.mail\.\w+/public/\S+/\S+(/.*)?)\Z");
+                if (uriMatch.Success)
+                    return await GetPublicItemAsync(new Uri(uriMatch.Groups["uri"].Value, UriKind.Absolute), itemType);
+            }
 
             if (Account.IsAnonymous)
                 return null;

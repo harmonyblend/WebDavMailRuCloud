@@ -34,7 +34,7 @@ namespace NWebDav.Server.Locking
                 new XElement(WebDavNamespaces.DavNsLockScope, new XElement(WebDavNamespaces.DavNs + XmlHelper.GetXmlValue(Scope))),
                 new XElement(WebDavNamespaces.DavNsDepth, Depth == int.MaxValue ? "infinity" : Depth.ToString(CultureInfo.InvariantCulture)),
                 new XElement(WebDavNamespaces.DavNsOwner, Owner),
-                new XElement(WebDavNamespaces.DavNsTimeout, Timeout == -1 ? "Infinite" : "Second-" + Timeout.ToString(CultureInfo.InvariantCulture)),
+                new XElement(WebDavNamespaces.DavNsTimeout, Timeout == -1 ? "Infinite" : string.Concat("Second-", Timeout.ToString(CultureInfo.InvariantCulture))),
                 new XElement(WebDavNamespaces.DavNsLockToken, new XElement(WebDavNamespaces.DavNsHref, LockToken.AbsoluteUri)),
                 new XElement(WebDavNamespaces.DavNsLockRoot, new XElement(WebDavNamespaces.DavNsHref, LockRoot.AbsoluteUri)));
         }

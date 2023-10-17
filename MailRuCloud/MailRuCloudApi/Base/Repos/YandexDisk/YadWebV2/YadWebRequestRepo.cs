@@ -192,6 +192,8 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
         private const string YadMediaPath = "/Media.wdyad";
 
+        private const int FirstReadEntriesCount = 200;
+
         public async Task<IEntry> FolderInfo(RemotePath path, int offset = 0, int limit = int.MaxValue, int depth = 1)
         {
             if (path.IsLink)
@@ -201,9 +203,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                 return await MediaFolderInfo(path.Path);
 
             // YaD perform async deletion
-            YadResponseModel<YadItemInfoRequestData, YadItemInfoRequestParams> itemInfo = null;
+            YadResponseModel<YadItemInfoRequestData, YadItemInfoRequestParams> entryInfo = null;
             YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderInfo = null;
-            YadResponseModel<YadResourceStatsRequestData, YadResourceStatsRequestParams> resourceStats = null;
+            YadResponseModel<YadResourceStatsRequestData, YadResourceStatsRequestParams> entryStats = null;
 
             bool hasRemoveOp = _lastRemoveOperation != null &&
                                WebDavPath.IsParentOrSame(path.Path, _lastRemoveOperation.Path) &&
@@ -216,37 +218,110 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                         Logger.Debug("Has remove op, sleep before");
                     return doPreSleep;
                 },
-                () => new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
-                    .With(new YadItemInfoPostModel(path.Path), out itemInfo)
-                    .With(new YadFolderInfoPostModel(path.Path), out folderInfo)
-                    .With(new YadResourceStatsPostModel(path.Path), out resourceStats)
+                () => new YaDCommonRequest(HttpSettings, (YadWebAuth)Authent)
+                    .With(new YadItemInfoPostModel(path.Path), out entryInfo)
+                    .With(new YadFolderInfoPostModel(path.Path) { WithParent = true, Amount = FirstReadEntriesCount }, out folderInfo)
+                    .With(new YadResourceStatsPostModel(path.Path), out entryStats)
                     .MakeRequestAsync()
                     .Result,
                 _ =>
                 {
-                    var doAgain = hasRemoveOp &&
-                           folderInfo.Data.Resources.Any(r =>
-                               WebDavPath.PathEquals(r.Path.Remove(0, "/disk".Length), _lastRemoveOperation.Path));
+                    bool doAgain = false;
+                    if (hasRemoveOp && _lastRemoveOperation != null)
+                    {
+                        string cmpPath = WebDavPath.Combine("/disk", _lastRemoveOperation.Path);
+                        doAgain = hasRemoveOp &&
+                           folderInfo.Data.Resources.Any(r => WebDavPath.PathEquals(r.Path, cmpPath));
+                    }
                     if (doAgain)
                         Logger.Debug("Remove op still not finished, let's try again");
                     return doAgain;
-                }, 
+                },
                 TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryCount);
-                
 
-            var itdata = itemInfo?.Data;
-            switch (itdata?.Type)
+
+            var entryData = entryInfo?.Data;
+            if (entryData?.Type is null)
+                return null;
+            if (entryData.Type == "file")
+                return entryData.ToFile();
+
+            Folder folder = folderInfo.Data.ToFolder(entryData, entryStats.Data, path.Path);
+
+            // Если количество полученных элементов списка меньше максимального запрошенного числа элементов,
+            // даже с учетом, что в число элементов сверх запрошенного входит информация
+            // о папке-контейнере (папке, чей список элементов запросили), то считаем,
+            // что получен полный список содержимого папки и возвращает данные.
+            if ((folderInfo.Data.Resources?.Count ?? int.MaxValue) < FirstReadEntriesCount)
+                return folder;
+            // В противном случае делаем несколько параллельных выборок для ускорения чтения списков с сервера.
+
+            int entryCount = folderInfo?.Data?.Resources.FirstOrDefault()?.Meta?.TotalEntityCount ?? 1;
+            int maxParallel = 1;
+            int parallelCount = int.MaxValue;
+            if (entryCount < 300 + FirstReadEntriesCount)
             {
-                case null:
-                    return null;
-                case "file":
-                    return itdata.ToFile();
-                default:
-                {
-                    var entry = folderInfo.Data.ToFolder(itemInfo.Data, resourceStats.Data, path.Path);
-                    return entry;
-                }
+                maxParallel = 1;
+                parallelCount = int.MaxValue;
             }
+            else
+            if (entryCount >= 3000 + FirstReadEntriesCount)
+            {
+                maxParallel = 10;
+                // Читать данные с сервера будем немного внахлест чтобы случайно не пропустить что-либо.
+                // Дубликаты с одинаковыми путями самоустранятся при сливании в один словарь.
+                parallelCount = entryCount / 10 + 5;
+            }
+            else
+            {
+                maxParallel = entryCount / 300 + 1;
+                parallelCount = 304;
+            }
+
+            Retry.Do(
+                () =>
+                {
+                    var doPreSleep = hasRemoveOp ? TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs) : TimeSpan.Zero;
+                    if (doPreSleep > TimeSpan.Zero)
+                        Logger.Debug("Has remove op, sleep before");
+                    return doPreSleep;
+                },
+                () =>
+                {
+                    Parallel.For(0, maxParallel, (int index) =>
+                    {
+                        YadResponseResult noReturn = new YaDCommonRequest(HttpSettings, (YadWebAuth)Authent)
+                            .With(new YadFolderInfoPostModel(path.Path)
+                            {
+                                Offset = FirstReadEntriesCount + parallelCount * index - 2 /* отступ для чтения внахлест */,
+                                Amount = index == maxParallel - 1 ? int.MaxValue : parallelCount
+                            }, out YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderPartInfo)
+                            .MakeRequestAsync()
+                            .Result;
+
+                        if (folderPartInfo?.Data is not null && folderPartInfo.Error is null)
+                            folder.MergeData(folderPartInfo.Data, entryData.Path);
+                    });
+                    YadResponseResult retValue = null;
+                    return retValue;
+                },
+                _ =>
+                {
+                    //TODO: Здесь полностью неправильная проверка
+                    bool doAgain = false;
+                    if (hasRemoveOp && _lastRemoveOperation != null)
+                    {
+                        string cmpPath = WebDavPath.Combine("/disk", _lastRemoveOperation.Path);
+                        doAgain = hasRemoveOp &&
+                           folderInfo.Data.Resources.Any(r => WebDavPath.PathEquals(r.Path, cmpPath));
+                    }
+                    if (doAgain)
+                        Logger.Debug("Remove op still not finished, let's try again");
+                    return doAgain;
+                },
+                TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryCount);
+
+            return folder;
         }
 
 
@@ -276,9 +351,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                 .MakeRequestAsync()
                 .Result;
 
-            var entry = folderInfo.Data.ToFolder(null, null, path);
+            Folder folder = folderInfo.Data.ToFolder(null, null, path);
+            folder.MergeData(folderInfo.Data, path);
 
-            return entry;
+            return folder;
         }
 
         private async Task<IEntry> MediaFolderRootInfo()
