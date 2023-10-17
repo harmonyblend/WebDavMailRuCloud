@@ -111,7 +111,7 @@ namespace YaR.Clouds.Base.Requests
 
                         /*
                          * The debug add the following to a watch list:
-                         *      System.Text.Encoding.UTF8.GetString(content)
+                         *      System.Text.Encoding.UTF8.GetString(requestContent)
                          */
 #if NET48
                         await requestStream.WriteAsync(requestContent, 0, requestContent.Length).ConfigureAwait(false);
