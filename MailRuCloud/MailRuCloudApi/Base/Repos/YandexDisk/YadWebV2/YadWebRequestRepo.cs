@@ -85,7 +85,8 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                 //    .MakeRequestAsync()
                 //    .Result;
                 string url = null;
-                if (file.DownloadUrlCache == null)
+                if (file.DownloadUrlCache == null ||
+                    file.DownloadUrlCacheExpirationTime <= DateTime.Now)
                 {
                     var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth)Authent)
                         .With(new YadGetResourceUrlPostModel(file.FullPath),
@@ -106,7 +107,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                             itemInfo?.Data?.Error?.Body?.Title));
                     }
                     url = "https:" + itemInfo.Data.File;
+
                     file.DownloadUrlCache = url;
+                    file.DownloadUrlCacheExpirationTime = DateTime.Now.AddMinutes(1);
                 }
                 else
                 {

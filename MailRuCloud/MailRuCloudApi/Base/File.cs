@@ -37,10 +37,17 @@ namespace YaR.Clouds.Base
         private IFileHash _hash;
 
         /// <summary>
+        /// Кеш URL на скачивание файла с сервера.
         /// Заполняется операцией GetDownloadStream,
         /// чтобы при повторном обращении на чтение файла не тратить время на получения URL'а.
         /// </summary>
         public string DownloadUrlCache { get; set; } = null;
+        /// <summary>
+        /// Время, с которого кешем <see cref="DownloadUrlCache"/> пользоваться нельзя
+        /// и нужно получить новый URL.
+        /// </summary>
+        public DateTime DownloadUrlCacheExpirationTime = DateTime.MinValue;
+
 
         /// <summary>
         /// makes copy of this file with new path
