@@ -36,9 +36,6 @@ namespace YaR.Clouds.Base.Repos
                 _ => throw new Exception("Unknown protocol")
             };
 
-            if (!string.IsNullOrWhiteSpace(_settings.UserAgent))
-                repo.HttpSettings.UserAgent = _settings.UserAgent;
-
             return repo;
         }
     }
