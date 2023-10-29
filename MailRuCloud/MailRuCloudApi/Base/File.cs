@@ -238,7 +238,7 @@ namespace YaR.Clouds.Base
 
         private static string ConvertToVideoLink(Cloud cloud, Uri publicLink, SharedVideoResolution videoResolution)
         {
-            return cloud.Account.RequestRepo.ConvertToVideoLink(publicLink, videoResolution);
+            return cloud.RequestRepo.ConvertToVideoLink(publicLink, videoResolution);
                        
                        
                    //    GetShardInfo(ShardType.WeblinkVideo).Result.Url +

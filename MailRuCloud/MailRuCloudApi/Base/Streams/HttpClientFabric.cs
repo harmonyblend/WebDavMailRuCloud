@@ -2,32 +2,31 @@
 using System.Net.Http;
 using System.Threading;
 
-namespace YaR.Clouds.Base.Streams
+namespace YaR.Clouds.Base.Streams;
+
+class HttpClientFabric
 {
-    class HttpClientFabric
+    public static HttpClientFabric Instance => _instance ??= new HttpClientFabric();
+    private static HttpClientFabric _instance;
+
+    public HttpClient this[Cloud cloud]
     {
-        public static HttpClientFabric Instance => _instance ??= new HttpClientFabric();
-        private static HttpClientFabric _instance;
-
-        public HttpClient this[Account account]
+        get
         {
-            get
+            var cli = _lockDict.GetOrAdd(cloud.Credentials, new HttpClient(new HttpClientHandler
             {
-                var cli =  _lockDict.GetOrAdd(account, new HttpClient(new HttpClientHandler
-                    {
-                        UseProxy = true,
-                        Proxy = account.RequestRepo.HttpSettings.Proxy,
-                        CookieContainer = account.RequestRepo.Authenticator.Cookies,
-                        UseCookies = true,
-                        AllowAutoRedirect = true,
-                        MaxConnectionsPerServer = int.MaxValue
-                    })
-                    {Timeout = Timeout.InfiniteTimeSpan});
+                UseProxy = true,
+                Proxy = cloud.RequestRepo.HttpSettings.Proxy,
+                CookieContainer = cloud.RequestRepo.Authenticator.Cookies,
+                UseCookies = true,
+                AllowAutoRedirect = true,
+                MaxConnectionsPerServer = int.MaxValue
+            })
+            { Timeout = Timeout.InfiniteTimeSpan });
 
-                return cli;
-            }
+            return cli;
         }
-
-        private readonly ConcurrentDictionary<Account, HttpClient> _lockDict = new();
     }
+
+    private readonly ConcurrentDictionary<Credentials, HttpClient> _lockDict = new();
 }

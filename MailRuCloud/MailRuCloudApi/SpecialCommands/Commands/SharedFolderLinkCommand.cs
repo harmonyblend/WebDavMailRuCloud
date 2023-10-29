@@ -29,7 +29,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
             //TODO: make method in MailRuCloud to get entry by url
             //var item = await new ItemInfoRequest(Cloud.CloudApi, m.Groups["url"].Value, true).MakeRequestAsync(_connectionLimiter);
-            var item = await Cloud.Account.RequestRepo.ItemInfo(RemotePath.Get(new Link(url)) );
+            var item = await Cloud.RequestRepo.ItemInfo(RemotePath.Get(new Link(url)) );
             var entry = item.ToEntry(Cloud.Repo.PublicBaseUrlDefault);
             if (entry is null)
                 return SpecialCommandResult.Fail;

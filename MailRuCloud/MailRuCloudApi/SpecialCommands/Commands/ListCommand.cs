@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using YaR.Clouds.Base;
 using YaR.Clouds.Base.Repos;
 using YaR.Clouds.Links;
-using YaR.Clouds.Common;
 
 namespace YaR.Clouds.SpecialCommands.Commands
 {
@@ -30,7 +29,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
             var resolvedTarget = await RemotePath.Get(target, Cloud.LinkManager);
 
-            var entry = await Cloud.Account.RequestRepo.FolderInfo(resolvedTarget);
+            var entry = await Cloud.RequestRepo.FolderInfo(resolvedTarget);
             string resFilepath = WebDavPath.Combine(Path, string.Concat(entry.Name, FileListExtention));
 
             var sb = new StringBuilder();
@@ -60,7 +59,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                     File => it,
                     Folder ifolder => ifolder.IsChildrenLoaded
                         ? ifolder
-                        : Cloud.Account.RequestRepo.FolderInfo(RemotePath.Get(it.FullPath, lm).Result, depth: 3).Result,
+                        : Cloud.RequestRepo.FolderInfo(RemotePath.Get(it.FullPath, lm).Result, depth: 3).Result,
                     _ => throw new NotImplementedException("Unknown item type")
                 })
                 .OrderBy(it => it.Name);

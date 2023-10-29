@@ -12,7 +12,7 @@ namespace YaR.Clouds
         public string UserAgent { get; set; }
         public string SecChUa { get; set; }
 
-        public Protocol Protocol { get; set; }
+        public Protocol Protocol { get; set; } = Protocol.Autodetect;
 
         public int CacheListingSec { get; set; } = 30;
 

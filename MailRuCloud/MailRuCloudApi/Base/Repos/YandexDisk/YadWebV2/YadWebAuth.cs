@@ -54,7 +54,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                         DiskSk = testAuthenticator.DiskSk;
                         Uuid = testAuthenticator.Uuid;
                         doRegularLogin = false;
-                        Logger.Info($"Authentication refreshed using cached cookie");
+                        Logger.Info($"Browser authentication refreshed using cached cookie");
                     }
                 }
                 catch (Exception)
@@ -74,8 +74,32 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
             if (doRegularLogin)
             {
-                MakeLogin().Wait();
-                Logger.Info($"Authentication successful");
+                try
+                {
+                    MakeLogin().Wait();
+                }
+                catch (AggregateException aex) when (aex.InnerException is HttpRequestException ex)
+                {
+                    Logger.Error("Browser authentication failed! " +
+                        "Please check browser authentication component is running!");
+
+                    throw new InvalidCredentialException("Browser authentication failed! Browser component is not running!");
+                }
+                catch (AggregateException aex) when (aex.InnerException is AuthenticationException ex)
+                {
+                    string txt = string.Concat("Browser authentication failed! ", ex.Message);
+                    Logger.Error(txt);
+
+                    throw new InvalidCredentialException(txt);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Browser authentication failed! " +
+                        "Check the URL and the password for browser authentication component!");
+
+                    throw new InvalidCredentialException("Browser authentication failed!");
+                }
+                Logger.Info($"Browser authentication successful");
             }
         }
 
@@ -167,6 +191,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
         public string Login => _creds.Login;
         public string Password => _creds.Password;
         public string DiskSk { get; set; }
+        /// <summary>
+        /// yandexuid
+        /// </summary>
         public string Uuid { get; set; }
 
         public bool IsAnonymous => false;
@@ -186,6 +213,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
             [JsonProperty("Login")]
             public string Login { get; set; }
 
+            /// <summary>
+            /// yandexuid
+            /// </summary>
             [JsonProperty("Uuid")]
             public string Uuid { get; set; }
 
@@ -224,9 +254,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
         private async Task<(BrowserAppResponse, string)> ConnectToBrowserApp()
         {
-            // Login для подключения содержит название логина Диска, не email, затем | и номер порта программы с браузером.
-            // Password - пароль в программе с браузером.
-
             string url = _settings.CloudSettings.BrowserAuthenticatorUrl;
             string password = string.IsNullOrWhiteSpace(Password)
                 ? _settings.CloudSettings.BrowserAuthenticatorPassword

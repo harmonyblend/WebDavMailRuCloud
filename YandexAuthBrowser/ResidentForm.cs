@@ -23,7 +23,8 @@ namespace YandexAuthBrowser
         public Execute AuthExecuteDelegate;
         private readonly int? SavedTop = null;
         private readonly int? SavedLeft = null;
-        private SemaphoreSlim Sema = new SemaphoreSlim(1, 1);
+        private SemaphoreSlim _showBrowserLocker;
+        private bool _doNotSave = false;
 
         private int AuthenticationOkCounter = 0;
         private int AuthenticationFailCounter = 0;
@@ -33,17 +34,25 @@ namespace YandexAuthBrowser
         {
             InitializeComponent();
 
+            _showBrowserLocker = new SemaphoreSlim(1, 1);
+
             var screen = Screen.GetWorkingArea(this);
             Top = screen.Height + 100;
             ShowInTaskbar = false;
 
             NotifyIcon.Visible = true;
 
-            // Get the current configuration file.
-            System.Configuration.Configuration config =
-                    ConfigurationManager.OpenExeConfiguration(
-                    ConfigurationUserLevel.None);
+#if DEBUG
+            _doNotSave = true;
+            Port.Text = "54322";
+            Password.Text = "adb4bcd5-b4b6-45b7-bb7d-b38470917448";
+            _doNotSave = false;
+#endif
 
+            // Get the current configuration file.
+            Configuration config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+
+            _doNotSave = true;
             string? value = config.AppSettings?.Settings?["port"]?.Value;
             if (!string.IsNullOrWhiteSpace(value) && int.TryParse(value, out _))
                 Port.Text = value;
@@ -57,6 +66,7 @@ namespace YandexAuthBrowser
             value = config.AppSettings?.Settings?["Left"]?.Value;
             if (!string.IsNullOrWhiteSpace(value) && int.TryParse(value, out int left))
                 SavedLeft = left;
+            _doNotSave = false;
 
 
             PreviousPort = Port.Text;
@@ -69,7 +79,6 @@ namespace YandexAuthBrowser
 
             Counter.Text = "";
 
-            RunServer = true;
             StartServer();
         }
 
@@ -128,9 +137,12 @@ namespace YandexAuthBrowser
         }
         private void SaveConfigTimer_Tick(object sender, EventArgs e)
         {
+            if (_doNotSave)
+                return;
+
             SaveConfigTimer.Enabled = false;
 
-            System.Configuration.Configuration config =
+            Configuration config =
                     ConfigurationManager.OpenExeConfiguration(
                     ConfigurationUserLevel.None);
 
@@ -164,6 +176,11 @@ namespace YandexAuthBrowser
         {
             NotifyIcon.Visible = false;
             StopServer();
+            if (SaveConfigTimer.Enabled)
+            {
+                SaveConfigTimer.Enabled = false;
+                SaveConfig();
+            }
 
             // При вызове Close дальше будет обработка в HiddenContext, см. там.
             Close();
@@ -178,8 +195,11 @@ namespace YandexAuthBrowser
         }
         private void SaveConfig()
         {
+            if (_doNotSave)
+                return;
+
             // Get the current configuration file.
-            System.Configuration.Configuration config =
+            Configuration config =
                     ConfigurationManager.OpenExeConfiguration(
                     ConfigurationUserLevel.None);
 
@@ -253,10 +273,6 @@ namespace YandexAuthBrowser
 
         private void StartServer()
         {
-#if DEBUG
-            Port.Text = "54322";
-            Password.Text = "adb4bcd5-b4b6-45b7-bb7d-b38470917448";
-#endif
             if (!int.TryParse(Port.Text, out int port))
             {
                 Port.Text = "54321";
@@ -269,6 +285,7 @@ namespace YandexAuthBrowser
                 // Create a http server and start listening for incoming connections
                 Listener?.Prefixes.Add($"http://localhost:{port}/");
                 Listener?.Start();
+                RunServer = true;
 
                 // Handle requests
                 _ = Task.Run(HandleIncomingConnections);
@@ -319,7 +336,7 @@ namespace YandexAuthBrowser
                 try
                 {
                     if (Listener == null)
-                        throw new NullReferenceException("Listener is null");
+                        break;
 
                     // Will wait here until we hear from a connection
                     HttpListenerContext ctx = await Listener.GetContextAsync();
@@ -345,13 +362,13 @@ namespace YandexAuthBrowser
                         response.ErrorMessage = "Password is wrong";
                     else
                     {
-                        Sema.Wait();
+                        _showBrowserLocker.Wait();
                         // Окно с браузером нужно открыть в потоке, обрабатывающем UI
                         if (AuthButton.InvokeRequired)
                             AuthButton.Invoke(AuthExecuteDelegate, login, response);
                         else
                             AuthExecuteDelegate(login, response);
-                        Sema.Release();
+                        _showBrowserLocker.Release();
                     }
 
                     string text = response.Serialize();

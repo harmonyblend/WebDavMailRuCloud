@@ -114,7 +114,7 @@ namespace YaR.Clouds.Base.Streams
                 }
             });
 
-            var client = HttpClientFabric.Instance[_cloud.Account];
+            var client = HttpClientFabric.Instance[_cloud];
             var uploadFileResult = Repo.DoUpload(client, pushContent, _file).Result;
 
 
@@ -122,7 +122,7 @@ namespace YaR.Clouds.Base.Streams
                 uploadFileResult.HttpStatusCode != HttpStatusCode.OK)
                 throw new Exception("Cannot upload file, status " + uploadFileResult.HttpStatusCode);
 
-            // 2020-10-26 mairu does not return file size now
+            // 2020-10-26 mail.ru does not return file size now
             //if (uploadFileResult.HasReturnedData && _file.OriginalSize != uploadFileResult.Size)
             //    throw new Exception("Local and remote file size does not match");
 
@@ -176,7 +176,7 @@ namespace YaR.Clouds.Base.Streams
         private readonly Cloud _cloud;
         private readonly File _file;
 
-        private IRequestRepo Repo => _cloud.Account.RequestRepo;
+        private IRequestRepo Repo => _cloud.RequestRepo;
         private readonly ICloudHasher _cloudFileHasher;
         private Task _uploadTask;
         private readonly RingBufferedStream _ringBuffer = new(65536);

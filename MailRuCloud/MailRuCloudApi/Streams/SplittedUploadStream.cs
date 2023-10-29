@@ -37,8 +37,8 @@ namespace YaR.Clouds.Streams
             FileStreamSent = fileStreamSent;
             ServerFileProcessed = serverFileProcessed;
 
-            _maxFileSize = _cloud.Account.Info.FileSizeLimit > 0
-                ? _cloud.Account.Info.FileSizeLimit - 1024
+            _maxFileSize = _cloud.AccountInfo.FileSizeLimit > 0
+                ? _cloud.AccountInfo.FileSizeLimit - 1024
                 : long.MaxValue - 1024;
 
             Initialize();

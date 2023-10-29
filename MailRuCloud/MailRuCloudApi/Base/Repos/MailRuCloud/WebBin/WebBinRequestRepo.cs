@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests;
@@ -19,8 +20,7 @@ using AnonymousRepo = YaR.Clouds.Base.Repos.MailRuCloud.WebV2.WebV2RequestRepo;
 using AccountInfoRequest = YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests.AccountInfoRequest;
 using CreateFolderRequest = YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.CreateFolderRequest;
 using MoveRequest = YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.MoveRequest;
-using System.Threading;
-using YaR.Clouds.Extensions;
+using static YaR.Clouds.Cloud;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 {
@@ -56,6 +56,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             HttpSettings.Proxy = settings.Proxy;
 
             _onAuthCodeRequired = onAuthCodeRequired;
+            Authenticator = new OAuth(_connectionLimiter, HttpSettings, credentials, onAuthCodeRequired);
 
             ShardManager = new ShardManager(_connectionLimiter, this);
 
@@ -64,7 +65,6 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             // required for Windows 7 breaking connection
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
 
-            Authenticator = new OAuth(_connectionLimiter, HttpSettings, credentials, onAuthCodeRequired);
         }
 
 

@@ -6,6 +6,8 @@ using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests;
 using YaR.Clouds.Base.Requests;
 using YaR.Clouds.Base.Requests.Types;
 using YaR.Clouds.Common;
+using static YaR.Clouds.Cloud;
+
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud
 {
@@ -20,11 +22,11 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
         private readonly AuthCodeRequiredDelegate _onAuthCodeRequired;
 
         public OAuth(SemaphoreSlim connectionLimiter,
-            HttpCommonSettings settings, IBasicCredentials creds, AuthCodeRequiredDelegate onAuthCodeRequired)
+            HttpCommonSettings settings, IBasicCredentials credentials, AuthCodeRequiredDelegate onAuthCodeRequired)
         {
             _settings = settings;
             _connectionLimiter = connectionLimiter;
-            _creds = creds;
+            _creds = credentials;
             _onAuthCodeRequired = onAuthCodeRequired;
             Cookies = new CookieContainer();
 

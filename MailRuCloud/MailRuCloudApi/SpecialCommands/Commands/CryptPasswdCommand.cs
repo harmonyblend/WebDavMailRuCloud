@@ -20,7 +20,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
             if (string.IsNullOrEmpty(newPasswd))
                 return await Task.FromResult(new SpecialCommandResult(false, "Crypt password is empty"));
 
-            Cloud.Account.Credentials.PasswordCrypt = newPasswd;
+            Cloud.Credentials.PasswordCrypt = newPasswd;
 
             return await Task.FromResult(SpecialCommandResult.Success);
         }

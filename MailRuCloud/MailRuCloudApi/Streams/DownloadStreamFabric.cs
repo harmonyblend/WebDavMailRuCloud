@@ -20,14 +20,14 @@ namespace YaR.Clouds.Streams
                 return CreateXTSStream(file, start, end);
 
             //return new DownloadStream(file, _cloud.CloudApi, start, end);
-            var stream = _cloud.Account.RequestRepo.GetDownloadStream(file, start, end);
+            var stream = _cloud.RequestRepo.GetDownloadStream(file, start, end);
             return stream;
         }
 
         private Stream CreateXTSStream(File file, long? start = null, long? end = null)
         {
             var pub = CryptoUtil.GetCryptoPublicInfo(_cloud, file);
-            var key = CryptoUtil.GetCryptoKey(_cloud.Account.Credentials.PasswordCrypt, pub.Salt);
+            var key = CryptoUtil.GetCryptoKey(_cloud.Credentials.PasswordCrypt, pub.Salt);
             var xts = XtsAes256.Create(key, pub.IV);
 
             long fileLength = file.OriginalSize;
@@ -40,7 +40,7 @@ namespace YaR.Clouds.Streams
                 : (requestedEnd / XTSBlockSize + 1) * XTSBlockSize;
             if (alignedEnd == 0) alignedEnd = 16;
 
-            var downStream = _cloud.Account.RequestRepo.GetDownloadStream(file, alignedOffset, alignedEnd);
+            var downStream = _cloud.RequestRepo.GetDownloadStream(file, alignedOffset, alignedEnd);
 
             ulong startSector = (ulong)alignedOffset / XTSSectorSize;
             int trimStart = (int)(requestedOffset - alignedOffset);

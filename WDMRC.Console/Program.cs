@@ -22,9 +22,9 @@ namespace YaR.Clouds.Console
                             Assembly = Assembly.GetExecutingAssembly(),
                             Name = options.ServiceInstall ?? options.ServiceUninstall ?? "wdmrc",
                             DisplayName = string.IsNullOrEmpty(options.ServiceInstallDisplayName)  
-                                ? $"WebDavCloud [{options.Protocol}]"
+                                ? $"WebDavCloud [{options.Port}]"
                                 : options.ServiceInstallDisplayName,
-                            Description = "WebDAV gate2cloud",
+                            Description = "WebDAV emulator for cloud.Mail.ru / disk.Yandex.ru",
 
                             FireStart = () => Payload.Run(options),
                             FireStop = Payload.Stop

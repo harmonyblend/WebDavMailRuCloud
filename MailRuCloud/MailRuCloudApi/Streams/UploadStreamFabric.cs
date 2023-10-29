@@ -32,7 +32,7 @@ namespace YaR.Clouds.Streams
             bool cryptRequired = !string.IsNullOrEmpty(fullPath);
             if (cryptRequired && !discardEncryption)
             {
-                if (!_cloud.Account.Credentials.CanCrypt)
+                if (!_cloud.Credentials.CanCrypt)
                     throw new Exception($"Cannot upload {file.FullPath} to crypt folder without additional password!");
 
                 // #142 remove crypted file parts if size changed
@@ -57,7 +57,7 @@ namespace YaR.Clouds.Streams
 
         private Stream GetCryptoStream(File file, FileUploadedDelegate onUploaded)
         {
-            var info = CryptoUtil.GetCryptoKeyAndSalt(_cloud.Account.Credentials.PasswordCrypt);
+            var info = CryptoUtil.GetCryptoKeyAndSalt(_cloud.Credentials.PasswordCrypt);
             var xts = XtsAes256.Create(info.Key, info.IV);
 
             file.ServiceInfo.CryptInfo = new CryptInfo

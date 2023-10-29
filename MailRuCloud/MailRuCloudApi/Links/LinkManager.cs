@@ -91,7 +91,7 @@ namespace YaR.Clouds.Links
         /// </summary>
         public async void Load()
         {
-            if (!_cloud.Account.IsAnonymous)
+            if (!_cloud.Credentials.IsAnonymous)
             {
                 Logger.Info($"Loading links from {LinkContainerName}");
 
@@ -310,7 +310,7 @@ namespace YaR.Clouds.Links
                 //    : link.Href.OriginalString;
 
                 //var infores = await new ItemInfoRequest(_cloud.CloudApi, link.Href, true).MakeRequestAsync(_connectionLimiter);
-                var infores = await _cloud.Account.RequestRepo.ItemInfo(RemotePath.Get(link));
+                var infores = await _cloud.RequestRepo.ItemInfo(RemotePath.Get(link));
                 link.ItemType = infores.Body.Kind == "file"
                     ? Cloud.ItemType.File
                     : Cloud.ItemType.Folder;
@@ -390,7 +390,7 @@ namespace YaR.Clouds.Links
 
         //private string GetRelaLink(Uri url)
         //{
-        //    foreach (string pbu in _cloud.Account.RequestRepo.PublicBaseUrls)
+        //    foreach (string pbu in _cloud.RequestRepo.PublicBaseUrls)
         //    {
         //        if (!string.IsNullOrEmpty(pbu))
         //            if (url.StartsWith(pbu)) 

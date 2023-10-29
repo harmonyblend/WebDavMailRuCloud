@@ -52,7 +52,7 @@ namespace YaR.Clouds.Console
         [Option("service", Required = false, Default = false, HelpText = "Started as a service")]
         public bool ServiceRun { get; set; }
 
-        [Option("protocol", Default = Protocol.WebM1Bin, HelpText = "Cloud protocol")]
+        [Option("protocol", Default = Protocol.Autodetect, HelpText = "Cloud protocol")]
         public Protocol Protocol { get; set; }
 
         [Option("cache-listing", Default = 30, HelpText = "Folder cache expiration timeout, sec")]

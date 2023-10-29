@@ -10,10 +10,10 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
         private readonly string _login;
         private readonly string _password;
 
-        public OAuthRequest(HttpCommonSettings settings, IBasicCredentials creds) : base(settings, null)
+        public OAuthRequest(HttpCommonSettings settings, IBasicCredentials credentials) : base(settings, null)
         {
-            _login = creds.Login;
-            _password = creds.Password;
+            _login = credentials.Login;
+            _password = credentials.Password;
         }
 
         protected override string RelationalUri => "https://o2.mail.ru/token";

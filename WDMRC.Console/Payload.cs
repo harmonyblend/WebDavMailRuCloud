@@ -219,7 +219,7 @@ namespace YaR.Clouds.Console
             Logger.Info($"Cloud server response timeout: {options.WaitResponseTimeoutSec} sec");
             Logger.Info($"Cloud download/upload timeout: {options.ReadWriteTimeoutSec} sec");
             Logger.Info($"Wait for 100-Continue timeout: {options.Wait100ContinueTimeoutSec} sec");
-            Logger.Info($"Cloud protocol: {options.Protocol}");
+            Logger.Info($"Cloud & protocol: defined by login and the rest parameters");
             Logger.Info($"Folder cache expiration timeout: {options.CacheListingSec} sec");
             Logger.Info($"List query folder depth: {options.CacheListingDepth}");
             Logger.Info($"Use locks: {options.UseLocks}");

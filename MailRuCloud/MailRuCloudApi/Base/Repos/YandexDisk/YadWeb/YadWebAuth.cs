@@ -11,10 +11,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 {
     class YadWebAuth : IAuth
     {
-        public YadWebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings, IBasicCredentials creds)
+        public YadWebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings, IBasicCredentials credentials)
         {
             _settings = settings;
-            _creds = creds;
+            _creds = credentials;
             Cookies = new CookieContainer();
 
             var _ = MakeLogin(connectionLimiter).Result;

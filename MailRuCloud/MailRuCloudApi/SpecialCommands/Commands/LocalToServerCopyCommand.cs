@@ -7,9 +7,9 @@ namespace YaR.Clouds.SpecialCommands.Commands
 {
     public class LocalToServerCopyCommand : SpecialCommand
     {
-        private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(Account));
+        private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(LocalToServerCopyCommand));
 
-        public LocalToServerCopyCommand(Cloud cloud, string path, IList<string> parames) : base(cloud, path, parames)
+        public LocalToServerCopyCommand(Cloud cloud, string path, IList<string> parameters) : base(cloud, path, parameters)
         {
         }
 

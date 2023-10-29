@@ -7,6 +7,7 @@ using YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests;
 using YaR.Clouds.Base.Requests;
 using YaR.Clouds.Base.Requests.Types;
 using YaR.Clouds.Common;
+using static YaR.Clouds.Cloud;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2
 {
@@ -20,22 +21,23 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2
         private readonly HttpCommonSettings _settings;
         private readonly IBasicCredentials _creds;
 
-        public WebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings, IBasicCredentials creds, AuthCodeRequiredDelegate onAuthCodeRequired)
+        public WebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings,
+            IBasicCredentials credentials, AuthCodeRequiredDelegate onAuthCodeRequired)
         {
             _connectionLimiter = connectionLimiter;
             _settings = settings;
-            _creds = creds;
+            _creds = credentials;
             Cookies = new CookieContainer();
 
             var logged = MakeLogin(connectionLimiter, onAuthCodeRequired).Result;
             if (!logged)
-                throw new AuthenticationException($"Cannot log in {creds.Login}");
+                throw new AuthenticationException($"Cannot log in {credentials.Login}");
 
 
             _authToken = new Cached<AuthTokenResult>(_ =>
                 {
                     Logger.Debug("AuthToken expired, refreshing.");
-                    if (creds.IsAnonymous) 
+                    if (credentials.IsAnonymous) 
                         return null;
 
                     var token = Auth(connectionLimiter).Result;

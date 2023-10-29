@@ -27,7 +27,7 @@ namespace YaR.Clouds.Base.Repos
                 return code;
             }
 
-            IRequestRepo repo = _settings.Protocol switch
+            IRequestRepo repo = _credentials.Protocol switch
             {
                 Protocol.YadWebV2 => new YandexDisk.YadWebV2.YadWebRequestRepo(_settings, _settings.Proxy, _credentials),
                 Protocol.YadWeb => new YandexDisk.YadWeb.YadWebRequestRepo(_settings, _settings.Proxy, _credentials),

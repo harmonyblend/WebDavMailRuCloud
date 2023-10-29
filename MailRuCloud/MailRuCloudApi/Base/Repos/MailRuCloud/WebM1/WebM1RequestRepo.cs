@@ -14,6 +14,7 @@ using YaR.Clouds.Base.Streams;
 using YaR.Clouds.Common;
 using CreateFolderRequest = YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.CreateFolderRequest;
 using MoveRequest = YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.MoveRequest;
+using static YaR.Clouds.Cloud;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
 {

@@ -30,6 +30,8 @@ namespace YaR.Clouds
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(Cloud));
 
+        public delegate string AuthCodeRequiredDelegate(string login, bool isAutoRelogin);
+
         public LinkManager LinkManager { get; }
 
         /// <summary>
@@ -38,13 +40,6 @@ namespace YaR.Clouds
         public readonly CancellationTokenSource CancelToken = new();
 
         public CloudSettings Settings { get; }
-
-        /// <summary>
-        /// Gets or sets account to connect with cloud.
-        /// </summary>
-        /// <value>Account info.</value>
-        public Account Account { get; }
-
 
         ///// <summary>
         ///// Caching files for multiple small reads
@@ -56,19 +51,28 @@ namespace YaR.Clouds
         /// </summary>
         private readonly EntryCache _entryCache;
 
+        internal IRequestRepo RequestRepo { get; }
+        internal Credentials Credentials { get; }
+        public AccountInfoResult AccountInfo { get; private set; } = null;
+
+
         /// <summary>
         /// Initializes a new instance of the <see cref="Cloud" /> class.
         /// </summary>
         public Cloud(CloudSettings settings, Credentials credentials)
         {
             Settings = settings;
-            Account = new Account(settings, credentials);
-            if (!Account.Login())
+            WebRequest.DefaultWebProxy.Credentials = CredentialCache.DefaultCredentials;
+            Credentials = credentials;
+            RequestRepo = new RepoFabric(settings, credentials).Create();
+
+            if (!Credentials.IsAnonymous)
             {
-                throw new AuthenticationException("Auth token hasn't been retrieved.");
+                AccountInfo = RequestRepo.AccountInfo().Result
+                    ?? throw new AuthenticationException("Auth token hasn't been retrieved.");
             }
 
-            _entryCache = new EntryCache(TimeSpan.FromSeconds(settings.CacheListingSec), Account.RequestRepo.ActiveOperationsAsync);
+            _entryCache = new EntryCache(TimeSpan.FromSeconds(settings.CacheListingSec), RequestRepo.ActiveOperationsAsync);
 
             ////TODO: wow very dummy linking, refact cache realization globally!
             //_itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(settings.CacheListingSec));
@@ -88,7 +92,7 @@ namespace YaR.Clouds
 
         public virtual async Task<IEntry> GetPublicItemAsync(Uri url, ItemType itemType = ItemType.Unknown)
         {
-            var entry = await Account.RequestRepo.FolderInfo(RemotePath.Get(new Link(url)));
+            var entry = await RequestRepo.FolderInfo(RemotePath.Get(new Link(url)));
 
             return entry;
         }
@@ -182,7 +186,7 @@ namespace YaR.Clouds
                     return await GetPublicItemAsync(new Uri(uriMatch.Groups["uri"].Value, UriKind.Absolute));
             }
 
-            if (Account.IsAnonymous)
+            if (Credentials.IsAnonymous)
                 return null;
 
             path = WebDavPath.Clean(path);
@@ -191,7 +195,7 @@ namespace YaR.Clouds
             if (fastGetFromCloud)
             {
                 remotePath = RemotePath.Get(path);
-                return await Account.RequestRepo.FolderInfo(remotePath, depth: 1, limit: 2);
+                return await RequestRepo.FolderInfo(remotePath, depth: 1, limit: 2);
             }
 
             (var cached, var getState) = _entryCache.Get(path);
@@ -227,7 +231,7 @@ namespace YaR.Clouds
             //    //_itemCache.Add(cachefolder.Files);
             //}
             remotePath = ulink is null ? RemotePath.Get(path) : RemotePath.Get(ulink);
-            var cloudResult = await Account.RequestRepo.FolderInfo(remotePath, depth: Settings.ListDepth);
+            var cloudResult = await RequestRepo.FolderInfo(remotePath, depth: Settings.ListDepth);
             if (cloudResult is null)
             {
                 // Если обратились к серверу, а в ответ пустота,
@@ -453,7 +457,7 @@ namespace YaR.Clouds
         private async Task<bool> Unpublish(Uri publicLink, string fullPath)
         {
             //var res = (await new UnpublishRequest(CloudApi, publicLink).MakeRequestAsync(_connectionLimiter))
-            var res = (await Account.RequestRepo.Unpublish(publicLink, fullPath))
+            var res = (await RequestRepo.Unpublish(publicLink, fullPath))
                 .ThrowIf(r => !r.IsSuccess, _ => new Exception($"Unpublish error, link = {publicLink}"));
 
             return res.IsSuccess;
@@ -472,12 +476,12 @@ namespace YaR.Clouds
 
         private async Task<Uri> Publish(string fullPath)
         {
-            var res = (await Account.RequestRepo.Publish(fullPath))
+            var res = (await RequestRepo.Publish(fullPath))
                 .ThrowIf(r => !r.IsSuccess, _ => new Exception($"Publish error, path = {fullPath}"));
 
             var uri = new Uri(res.Url, UriKind.RelativeOrAbsolute);
             if (!uri.IsAbsoluteUri)
-                uri = new Uri($"{Account.RequestRepo.PublicBaseUrlDefault.TrimEnd('/')}/{res.Url.TrimStart('/')}", UriKind.Absolute);
+                uri = new Uri($"{RequestRepo.PublicBaseUrlDefault.TrimEnd('/')}/{res.Url.TrimStart('/')}", UriKind.Absolute);
 
             return uri;
         }
@@ -580,7 +584,7 @@ namespace YaR.Clouds
             }
 
             //var copyRes = await new CopyRequest(CloudApi, folder.FullPath, destinationPath).MakeRequestAsync(_connectionLimiter);
-            var copyRes = await Account.RequestRepo.Copy(folder.FullPath, destinationPath);
+            var copyRes = await RequestRepo.Copy(folder.FullPath, destinationPath);
             if (!copyRes.IsSuccess)
                 return false;
 
@@ -692,7 +696,7 @@ namespace YaR.Clouds
                     .Select(async pfile =>
                     {
                         //var copyRes = await new CopyRequest(CloudApi, pfile.FullPath, destPath, ConflictResolver.Rewrite).MakeRequestAsync(_connectionLimiter);
-                        var copyRes = await Account.RequestRepo.Copy(pfile.FullPath, destPath, ConflictResolver.Rewrite);
+                        var copyRes = await RequestRepo.Copy(pfile.FullPath, destPath, ConflictResolver.Rewrite);
                         if (!copyRes.IsSuccess) return false;
 
                         if (!doRename && WebDavPath.Name(copyRes.NewName) == newName)
@@ -781,7 +785,7 @@ namespace YaR.Clouds
             //rename item
             if (link is null)
             {
-                var data = await Account.RequestRepo.Rename(fullPath, newName);
+                var data = await RequestRepo.Rename(fullPath, newName);
 
                 if (!data.IsSuccess)
                     return data.IsSuccess;
@@ -869,7 +873,7 @@ namespace YaR.Clouds
                 return remapped;
             }
 
-            var res = await Account.RequestRepo.Move(folder.FullPath, destinationPath);
+            var res = await RequestRepo.Move(folder.FullPath, destinationPath);
             _entryCache.ResetCheck();
             _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
             _entryCache.OnRemoveTreeAsync(folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
@@ -932,7 +936,7 @@ namespace YaR.Clouds
                 .WithDegreeOfParallelism(file.Files.Count)
                 .Select(async pfile =>
                 {
-                    return await Account.RequestRepo.Move(pfile.FullPath, destinationPath);
+                    return await RequestRepo.Move(pfile.FullPath, destinationPath);
                 });
 
 
@@ -1054,7 +1058,7 @@ namespace YaR.Clouds
                 }
             }
 
-            var res = await Account.RequestRepo.Remove(fullPath);
+            var res = await RequestRepo.Remove(fullPath);
             if (!res.IsSuccess)
                 return false;
 
@@ -1075,7 +1079,7 @@ namespace YaR.Clouds
 
         public IEnumerable<PublicLinkInfo> GetSharedLinks(string fullPath)
         {
-            return Account.RequestRepo.GetShareLinks(fullPath);
+            return RequestRepo.GetShareLinks(fullPath);
         }
 
         /// <summary>
@@ -1084,7 +1088,7 @@ namespace YaR.Clouds
         /// <returns>Returns Total/Free/Used size.</returns>
         public async Task<DiskUsage> GetDiskUsageAsync()
         {
-            var data = await Account.RequestRepo.AccountInfo();
+            var data = await RequestRepo.AccountInfo();
             return data.DiskUsage;
         }
         public DiskUsage GetDiskUsage()
@@ -1101,7 +1105,7 @@ namespace YaR.Clouds
             CancelToken.Cancel(false);
         }
 
-        public IRequestRepo Repo => Account.RequestRepo;
+        public IRequestRepo Repo => RequestRepo;
 
         /// <summary>
         /// Create folder on the server.
@@ -1121,7 +1125,7 @@ namespace YaR.Clouds
 
         public async Task<bool> CreateFolderAsync(string fullPath)
         {
-            var res = await Account.RequestRepo.CreateFolder(fullPath);
+            var res = await RequestRepo.CreateFolder(fullPath);
 
             if (res.IsSuccess)
             {
@@ -1140,7 +1144,7 @@ namespace YaR.Clouds
 
         public async Task<CloneItemResult> CloneItem(string toPath, string fromUrl)
         {
-            var res = await Account.RequestRepo.CloneItem(fromUrl, toPath);
+            var res = await RequestRepo.CloneItem(fromUrl, toPath);
 
             if (res.IsSuccess)
             {
@@ -1191,7 +1195,7 @@ namespace YaR.Clouds
 
         public T DownloadFileAsJson<T>(File file)
         {
-            using var stream = Account.RequestRepo.GetDownloadStream(file);
+            using var stream = RequestRepo.GetDownloadStream(file);
             using var reader = new StreamReader(stream);
             using var jsonReader = new JsonTextReader(reader);
 
@@ -1212,7 +1216,7 @@ namespace YaR.Clouds
                 if (entry is null || entry is not File file)
                     return null;
                 {
-                    using var stream = Account.RequestRepo.GetDownloadStream(file);
+                    using var stream = RequestRepo.GetDownloadStream(file);
                     using var reader = new StreamReader(stream);
 
                     string res = await reader.ReadToEndAsync();
@@ -1306,7 +1310,7 @@ namespace YaR.Clouds
 
         public async Task<AddFileResult> AddFile(IFileHash hash, string fullFilePath, long size, ConflictResolver? conflict = null)
         {
-            var res = await Account.RequestRepo.AddFile(fullFilePath, hash, size, DateTime.Now, conflict);
+            var res = await RequestRepo.AddFile(fullFilePath, hash, size, DateTime.Now, conflict);
 
             if (res.Success)
             {
@@ -1329,7 +1333,7 @@ namespace YaR.Clouds
             if (file.LastWriteTimeUtc == dateTime)
                 return true;
 
-            var added = await Account.RequestRepo.AddFile(file.FullPath, file.Hash, file.Size, dateTime, ConflictResolver.Rename);
+            var added = await RequestRepo.AddFile(file.FullPath, file.Hash, file.Size, dateTime, ConflictResolver.Rename);
             bool res = added.Success;
             if (res)
             {

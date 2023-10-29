@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -38,7 +37,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
             {
                 //var res = await new CreateFileRequest(Cloud.CloudApi, target, strRandomHash, randomSize, ConflictResolver.Rename).MakeRequestAsync(_connectionLimiter);
                 var hash = new FileHashMrc(randomHash);
-                var res = await Cloud.Account.RequestRepo.AddFile(target, hash, randomSize, DateTime.Now,  ConflictResolver.Rename);
+                var res = await Cloud.RequestRepo.AddFile(target, hash, randomSize, DateTime.Now,  ConflictResolver.Rename);
                 if (res.Success)
                 {
                     Logger.Warn("╔╗╔╗╔╦══╦╗╔╗╔╗╔╦╦╗");

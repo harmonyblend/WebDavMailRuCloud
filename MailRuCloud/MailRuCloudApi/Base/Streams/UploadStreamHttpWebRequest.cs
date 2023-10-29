@@ -40,8 +40,8 @@
 //                        return null;
 //                    }
 
-//                    //var shard = _cloud.Account.RequestRepo.GetShardInfo(ShardType.Upload).Result;
-//                    _request = _cloud.Account.RequestRepo.UploadRequest(_file, null);
+//                    //var shard = _cloud.RequestRepo.GetShardInfo(ShardType.Upload).Result;
+//                    _request = _cloud.RequestRepo.UploadRequest(_file, null);
 
 //                    Logger.Debug($"HTTP:{_request.Method}:{_request.RequestUri.AbsoluteUri}");
 

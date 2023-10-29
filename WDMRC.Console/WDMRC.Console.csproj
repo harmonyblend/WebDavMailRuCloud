@@ -13,8 +13,8 @@
     <Authors>YaR</Authors>
     <Company />
     <Product>WebDAVCloudMailRu</Product>
-    <Copyright>yar229@yandex.ru;ZZZConsulting@internet.ru</Copyright>
-    <Description>WebDAV emulator for Cloud.mail.ru</Description>
+    <Copyright>MIT License, Copyright (c) 2023 YaR</Copyright>
+    <Description>WebDAV emulator for cloud.Mail.ru / disk.Yandex.ru</Description>
     <PackageId>WebDAVCloudMailRu</PackageId>
     <AssemblyVersion>$(ReleaseVersion)</AssemblyVersion>
     <FileVersion>$(ReleaseVersion)</FileVersion>
@@ -26,7 +26,7 @@
     <PackageProjectUrl>https://github.com/yar229/WebDavMailRuCloud</PackageProjectUrl>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
     <RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
-    <Title>WebDAV emulator for Cloud.mail.ru / Yandex.Disk</Title>
+    <Title>WebDAV emulator for cloud.Mail.ru / disk.Yandex.ru</Title>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -64,7 +64,7 @@
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
     <None Update="wdmrc.config">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 </Project>
