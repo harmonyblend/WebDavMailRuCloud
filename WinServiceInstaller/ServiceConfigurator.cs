@@ -72,7 +72,10 @@ namespace WinServiceInstaller
             // Если ключа реестра нет, значит сначала надо программу прописать сервисом, а только потом править параметры запуска
             if (serviceKey == null)
             {
-                string consoleText = RunSc("create", _name, "start=", "auto", "binPath=", exePath);
+                string consoleText = RunSc("create", _name,
+                    "start=", "auto",
+                    "binPath=", exePath,
+                    "DisplayName=", _displayName);
                 if (!(consoleText.Contains("успех", StringComparison.OrdinalIgnoreCase)
                     || consoleText.Contains("success", StringComparison.OrdinalIgnoreCase)
                     || consoleText.Contains("PENDING", StringComparison.OrdinalIgnoreCase)
@@ -94,6 +97,14 @@ namespace WinServiceInstaller
                     || consoleText.Contains("1062:" /*ERROR_SERVICE_NOT_ACTIVE*/, StringComparison.OrdinalIgnoreCase)
                     ))
                     throw new Exception("Error while stopping the service\r\n" + consoleText);
+            }
+            {
+                string consoleText = RunSc("Description", _name, _description);
+                if (!(consoleText.Contains("успех", StringComparison.OrdinalIgnoreCase)
+                    || consoleText.Contains("success", StringComparison.OrdinalIgnoreCase)
+                    || consoleText.Contains("PENDING", StringComparison.OrdinalIgnoreCase)
+                    ))
+                    throw new Exception("Error while installing the service\r\n" + consoleText);
             }
 
             string cmd = string.IsNullOrWhiteSpace(CommandLine)
@@ -226,6 +237,10 @@ namespace WinServiceInstaller
             {
                 proc.Kill();
             }
+            //if (proc.ExitCode != 0)
+            //{
+            //    Console.WriteLine(sb.ToString());
+            //}
             return standardOutput + standardError;
         }
 
