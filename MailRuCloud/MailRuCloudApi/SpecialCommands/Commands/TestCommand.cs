@@ -6,7 +6,8 @@ namespace YaR.Clouds.SpecialCommands.Commands
 {
     public class TestCommand : SpecialCommand
     {
-        public TestCommand(Cloud cloud, string path, IList<string> parames) : base(cloud, path, parames)
+        public TestCommand(Cloud cloud, string path, IList<string> parameters)
+            : base(cloud, path, parameters)
         {
         }
 
@@ -19,17 +20,16 @@ namespace YaR.Clouds.SpecialCommands.Commands
             if (await Cloud.GetItemAsync(path) is not File entry)
                 return SpecialCommandResult.Fail;
 
-            //var auth = await new OAuthRequest(Cloud.CloudApi).MakeRequestAsync();
+            //var auth = await new OAuthRequest(Cloud.CloudApi).MakeRequestAsync(_connectionLimiter);
 
             bool removed = await Cloud.Remove(entry, false);
             if (removed)
             {
                 //var addreq = await new MobAddFileRequest(Cloud.CloudApi, entry.FullPath, entry.Hash, entry.Size, new DateTime(2010, 1, 1), ConflictResolver.Rename)
-                //    .MakeRequestAsync();
+                //    .MakeRequestAsync(_connectionLimiter);
             }
 
             return SpecialCommandResult.Success;
         }
     }
-
 }

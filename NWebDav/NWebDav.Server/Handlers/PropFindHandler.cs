@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -117,11 +118,7 @@ namespace NWebDav.Server.Handlers
             }
 
             prepareWatch.Stop();
-#if DEBUG
-            s_log.Log(LogLevel.Warning, () => $"Prepare for XML generation {prepareWatch.ElapsedMilliseconds} ms");
-#else
             s_log.Log(LogLevel.Debug, () => $"Prepare for XML generation {prepareWatch.ElapsedMilliseconds} ms");
-#endif
 
             var sw = Stopwatch.StartNew();
 
@@ -210,12 +207,7 @@ namespace NWebDav.Server.Handlers
                 });
 
             var elapsed = sw.ElapsedMilliseconds;
-#if DEBUG
-            s_log.Log(LogLevel.Warning, () => $"Response XML generation {elapsed} ms");
-#else
             s_log.Log(LogLevel.Debug, () => $"Response XML generation {elapsed} ms");
-#endif
-
 
             // Stream the document
             await response.SendResponseAsync(DavStatusCode.MultiStatus, xDocument).ConfigureAwait(false);
@@ -237,9 +229,11 @@ namespace NWebDav.Server.Handlers
                     // Check if the property is supported
                     // YaR: optimize //if (propertyManager.Properties.Any(p => p.Name == propertyName))
 
-                    var value = await propertyManager.TryGetPropertyAsync(httpContext, item, propertyName).ConfigureAwait(false);
+                    var (isExists, value) = await propertyManager
+                        .TryGetPropertyAsync(httpContext, item, propertyName)
+                        .ConfigureAwait(false);
 
-                    if (value.IsExists)
+                    if (isExists)
                     {
                         //YaR: can't catch what that mean
                         //if (value is IEnumerable<XElement>)
@@ -256,7 +250,7 @@ namespace NWebDav.Server.Handlers
 
                         //xProp.Add (new XElement(propertyName, value.Value));
                         //xProp.Add(new XStreamingElement(propertyName, value.Value));
-                        xProp.Add(GetPropertyXElement(propertyName, value.Value));
+                        xProp.Add(GetPropertyXElement(propertyName, value));
                     }
                     else
                     {
@@ -299,25 +293,25 @@ namespace NWebDav.Server.Handlers
                     return xval;
 
                 var xvalnew = new XStreamingElement(name, value);
-                vals.Dict.Add(value, xvalnew);
+                vals.Dict[value] = xvalnew;
 
                 return xvalnew;
             }
             else
             {
-                vals = new() { Dict = new Dictionary<object, XStreamingElement>() };
+                vals = new() { Dict = new ConcurrentDictionary<object, XStreamingElement>() };
                 var xval = new XStreamingElement(name, value);
                 if (value == null)
                     vals.NullElement = xval;
                 else
-                    vals.Dict.Add(value, xval);
+                    vals.Dict[value] = xval;
 
                 PropertyCache[name] = vals;
 
                 return xval;
             }
         }
-        private static readonly Dictionary<XName, (Dictionary<object, XStreamingElement> Dict, XStreamingElement NullElement)> PropertyCache = new();
+        private static readonly ConcurrentDictionary<XName, (ConcurrentDictionary<object, XStreamingElement> Dict, XStreamingElement NullElement)> PropertyCache = new();
 
         private static readonly HashSet<XName> Properties2Cache = new()
         {
@@ -407,6 +401,3 @@ namespace NWebDav.Server.Handlers
         }
     }
 }
-
-
-

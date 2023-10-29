@@ -8,17 +8,19 @@ namespace YaR.CloudMailRu.Client.Console
 {
     static class UploadStub
     {
-        public static int Upload(UploadOptions cmdoptions)
+        public static int Upload(UploadOptions cmdOptions)
         {
-            string user = cmdoptions.Login;
-            string password = cmdoptions.Password;
-            string listname = cmdoptions.FileList;
-            string targetpath = cmdoptions.Target;
+            string user = cmdOptions.Login;
+            string password = cmdOptions.Password;
+            string listname = cmdOptions.FileList;
+            string targetpath = cmdOptions.Target;
 
 
 
             if (targetpath.StartsWith(@"\\\"))
+#pragma warning disable SYSLIB1045 // Convert to 'GeneratedRegexAttribute'.
                 targetpath = Regex.Replace(targetpath, @"\A\\\\\\.*?\\.*?\\", @"\");
+#pragma warning restore SYSLIB1045 // Convert to 'GeneratedRegexAttribute'.
 
             targetpath = WebDavPath.Clean(targetpath);
 

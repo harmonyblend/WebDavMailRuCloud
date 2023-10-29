@@ -17,7 +17,7 @@ using File = YaR.Clouds.Base.File;
 
 namespace YaR.Clouds.WebDavStore.StoreBase
 {
-    [DebuggerDisplay("{FileInfo.FullPath}")]
+    [DebuggerDisplay("{DebuggerDisplay,nq}")]
     public class LocalStoreItem : ILocalStoreItem
     {
         private static readonly ILogger Logger = LoggerFactory.Factory.CreateLogger(typeof(LocalStoreItem));
@@ -30,6 +30,8 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         public IEntry EntryInfo => FileInfo;
         public long Length => FileInfo.Size;
         public bool IsReadable => true;
+
+        private string DebuggerDisplay => FileInfo.FullPath;
 
         public LocalStoreItem(File fileInfo, bool isWritable, LocalStore store)
         {

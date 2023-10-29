@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using YaR.Clouds.Common;
 
 namespace YaR.Clouds.Base
 {
@@ -12,7 +12,7 @@ namespace YaR.Clouds.Base
     /// Server file info.
     /// </summary>
     [DebuggerDisplay("{" + nameof(FullPath) + "}")]
-    public class Folder : IEntry, ICanForget
+    public class Folder : IEntry
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="Folder" /> class.
@@ -40,22 +40,49 @@ namespace YaR.Clouds.Base
             }
         }
 
-        public IEnumerable<IEntry> Entries
+        /// <summary>
+        /// makes copy of this file with new path
+        /// </summary>
+        /// <param name="newFullPath"></param>
+        /// <returns></returns>
+        public virtual Folder New(string newFullPath, IEnumerable<IEntry> children = null)
         {
-            get
+            var folder = new Folder(Size, newFullPath, null)
             {
-                foreach (var file in Files.Values)
-                    yield return file;
-                foreach (var folder in Folders.Values)
-                    yield return folder;
-            }
+                CreationTimeUtc = CreationTimeUtc,
+                LastAccessTimeUtc = LastAccessTimeUtc,
+                LastWriteTimeUtc = LastWriteTimeUtc,
+                Attributes = Attributes,
+                ServerFoldersCount = ServerFoldersCount,
+                ServerFilesCount = ServerFilesCount,
+                Descendants = children != null
+                    ? ImmutableList.Create(children.ToArray())
+                    : ImmutableList<IEntry>.Empty,
+                IsChildrenLoaded = children != null
+            };
+            foreach (var linkPair in PublicLinks)
+                folder.PublicLinks.AddOrUpdate(linkPair.Key, linkPair.Value, (_, _) => linkPair.Value);
+
+            return folder;
         }
 
-        public ConcurrentDictionary<string /* FullPath of File */, File> Files { get; set; }
-            = new(StringComparer.InvariantCultureIgnoreCase);
+        //public IEnumerable<IEntry> Entries
+        //{
+        //    get
+        //    {
+        //        foreach (var file in Files.Values)
+        //            yield return file;
+        //        foreach (var folder in Folders.Values)
+        //            yield return folder;
+        //    }
+        //}
 
-        public ConcurrentDictionary<string /* FullPath of Folder */, Folder> Folders { get; set; }
-            = new(StringComparer.InvariantCultureIgnoreCase);
+        // Больше никакой вложенной информации
+        //public ConcurrentDictionary<string /* FullPath of File */, File> Files { get; set; }
+        //    = new(StringComparer.InvariantCultureIgnoreCase);
+
+        //public ConcurrentDictionary<string /* FullPath of Folder */, Folder> Folders { get; set; }
+        //    = new(StringComparer.InvariantCultureIgnoreCase);
 
 
         /// <summary>
@@ -106,7 +133,9 @@ namespace YaR.Clouds.Base
 
         public bool IsFile => false;
 
-        public bool IsChildrenLoaded { get; internal set; }
+        public bool IsChildrenLoaded { get; internal set; } = false;
+
+        public ImmutableList<IEntry> Descendants { get; set; } = ImmutableList<IEntry>.Empty;
 
 
         public int? ServerFoldersCount { get; set; }
@@ -120,28 +149,27 @@ namespace YaR.Clouds.Base
             return info;
         }
 
-
         //public List<KeyValuePair<string, IEntry>> GetLinearChildren()
         //{
-            
+
         //}
-        public void Forget(object whomKey)
-        {
-            string key = whomKey?.ToString();
+        //public void Forget(object whomKey)
+        //{
+        //    string key = whomKey?.ToString();
 
-            if (string.IsNullOrEmpty(key))
-                return;
+        //    if (string.IsNullOrEmpty(key))
+        //        return;
 
-            // Удалять начинаем с директорий, т.к. их обычно меньше,
-            // а значит поиск должен завершиться в среднем быстрее.
+        //    // Удалять начинаем с директорий, т.к. их обычно меньше,
+        //    // а значит поиск должен завершиться в среднем быстрее.
 
-            if (!Folders.TryRemove(key, out _))
-            {
-                // Если по ключу в виде полного пути не удалось удалить директорию,
-                // пытаемся по этому же ключу удалить файл, если он есть.
-                // Если ничего не удалилось, значит и удалять нечего.
-                _ = Files.TryRemove( key, out _);
-            }
-        }
+        //    if (!Folders.TryRemove(key, out _))
+        //    {
+        //        // Если по ключу в виде полного пути не удалось удалить директорию,
+        //        // пытаемся по этому же ключу удалить файл, если он есть.
+        //        // Если ничего не удалилось, значит и удалять нечего.
+        //        _ = Files.TryRemove( key, out _);
+        //    }
+        //}
     }
 }

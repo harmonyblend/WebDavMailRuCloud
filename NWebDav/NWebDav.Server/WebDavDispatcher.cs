@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Reflection;
 using System.Security.Authentication;
@@ -87,7 +88,7 @@ namespace NWebDav.Server
                 throw new ArgumentException("The HTTP context doesn't have a response.", nameof(httpContext));
 
             // Determine the request log-string
-            var logRequest = $"{request.HttpMethod}:{request.Url}:{request.RemoteEndPoint}";
+            var logRequest = $"{request.HttpMethod}:{Uri.UnescapeDataString(request.Url.AbsoluteUri)}:{request.RemoteEndPoint}";
             var range = request.GetRange();
             if (null != range)
                 logRequest += $" ({range.Start?.ToString() ?? string.Empty}-{range.End?.ToString() ?? string.Empty})";

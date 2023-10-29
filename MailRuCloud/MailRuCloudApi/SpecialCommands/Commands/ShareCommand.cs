@@ -10,7 +10,8 @@ namespace YaR.Clouds.SpecialCommands.Commands
     public class ShareCommand : SpecialCommand
     {
 
-        public ShareCommand(Cloud cloud, string path, bool generateDirectVideoLink, bool makeM3UFile, IList<string> parames) : base(cloud, path, parames)
+        public ShareCommand(Cloud cloud, string path, bool generateDirectVideoLink, bool makeM3UFile, IList<string> parameters)
+            : base(cloud, path, parameters)
         {
             _generateDirectVideoLink = generateDirectVideoLink;
             _makeM3UFile = makeM3UFile;
@@ -40,7 +41,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                 path = WebDavPath.Combine(Path, param);
 
             var entry = await Cloud.GetItemAsync(path);
-            if (null == entry)
+            if (entry is null)
                 return SpecialCommandResult.Fail;
 
             try

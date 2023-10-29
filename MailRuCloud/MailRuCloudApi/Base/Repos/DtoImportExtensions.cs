@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Authentication;
@@ -19,7 +18,7 @@ namespace YaR.Clouds.Base.Repos
 
 		    var entry = itemType == Cloud.ItemType.File
 			    ? (IEntry)data.ToFile()
-			    : data.ToFolder();
+			    : (IEntry)data.ToFolder();
 
 		    return entry;
 		}
@@ -47,7 +46,8 @@ namespace YaR.Clouds.Base.Repos
 			var groupedFiles = list
 				.GroupBy(f => f.ServiceInfo.CleanName,
 					file => file)
-				.SelectMany(group => group.Count() == 1         //TODO: DIRTY: if group contains header file, than make SplittedFile, else do not group
+                //TODO: DIRTY: if group contains header file, than make SplittedFile, else do not group
+                .SelectMany(group => group.Count() == 1
 					? group.Take(1)
 					: group.Any(f => f.Name == f.ServiceInfo.CleanName)
 						? Enumerable.Repeat(new SplittedFile(group.ToList()), 1)
@@ -64,24 +64,23 @@ namespace YaR.Clouds.Base.Repos
 
         internal static Folder ToFolder(this FsFolder data)
         {
-            var res = new Folder((long)data.Size, data.FullPath) { IsChildrenLoaded = data.IsChildrenLoaded };
+            var folder = new Folder((long)data.Size, data.FullPath) { IsChildrenLoaded = data.IsChildrenLoaded };
 
-            res.Files = new ConcurrentDictionary<string, File>(
+            var children = new List<IEntry>();
+            children.AddRange(
                 data.Items
                     .OfType<FsFile>()
                     .Select(f => f.ToFile())
-                    .ToGroupedFiles()
-                    .Select(item => new KeyValuePair<string, File>(item.FullPath, item)),
-                StringComparer.InvariantCultureIgnoreCase);
+                    .ToGroupedFiles());
 
-            res.Folders = new ConcurrentDictionary<string, Folder>(
+            children.AddRange(
                 data.Items
                     .OfType<FsFolder>()
-                    .Select(f => f.ToFolder())
-                    .Select(item => new KeyValuePair<string, Folder>(item.FullPath, item)),
-                StringComparer.InvariantCultureIgnoreCase);
+                    .Select(f => f.ToFolder()));
 
-            return res;
+            folder.Descendants = folder.Descendants.AddRange(children);
+
+            return folder;
         }
 
 

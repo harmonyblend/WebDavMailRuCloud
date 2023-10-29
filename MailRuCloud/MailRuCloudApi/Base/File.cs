@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -152,6 +153,8 @@ namespace YaR.Clouds.Base
                 : PublicLinks.Values;
         }
 
+        public ImmutableList<IEntry> Descendants => ImmutableList<IEntry>.Empty;
+
         /// <summary>
         /// List of physical files contains data
         /// </summary>
@@ -221,7 +224,7 @@ namespace YaR.Clouds.Base
                     {
                         Path = innerFile.FullPath,
                         Urls =  innerFile.PublicLinks.Select(pli => pli.Value.Uri).ToList(),
-                        PlaylistUrl = !isSplitted || cnt > 0
+                        PlayListUrl = !isSplitted || cnt > 0
                                           ? generateDirectVideoLink 
                                                 ? ConvertToVideoLink(cloud, innerFile.PublicLinks.Values.FirstOrDefault()?.Uri, videoResolution)
                                                 : null

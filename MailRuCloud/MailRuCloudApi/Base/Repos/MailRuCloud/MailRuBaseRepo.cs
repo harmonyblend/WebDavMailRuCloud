@@ -17,11 +17,11 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
         public static readonly string[] AvailDomains = {"mail", "inbox", "bk", "list"};
 
-        protected MailRuBaseRepo(IBasicCredentials creds)
+        protected MailRuBaseRepo(IBasicCredentials credentials)
         {
-            Credentials = creds;
+            Credentials = credentials;
 
-            if (AvailDomains.Any(d => creds.Login.Contains($"@{d}."))) 
+            if (AvailDomains.Any(d => credentials.Login.Contains($"@{d}."))) 
                 return;
 
             string domains = AvailDomains.Aggregate((c, n) => c + ", @" + n);
@@ -30,7 +30,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
         protected readonly IBasicCredentials Credentials;
 
-        public IAuth Authent { get; protected set; }
+        public IAuth Authenticator { get; protected set; }
         public abstract HttpCommonSettings HttpSettings { get; }
 
         public abstract Task<ShardInfo> GetShardInfo(ShardType shardType);
@@ -56,7 +56,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
         private HttpRequestMessage UploadClientRequest(PushStreamContent content, File file)
         {
             var shard = GetShardInfo(ShardType.Upload).Result;
-            var url = new Uri($"{shard.Url}?token={Authent.AccessToken}");  //cloud_domain=2&x-email={Authent.Login.Replace("@", "%40")}&
+            var url = new Uri($"{shard.Url}?token={Authenticator.AccessToken}");  //cloud_domain=2&x-email={Authenticator.Login.Replace("@", "%40")}&
 
             var request = new HttpRequestMessage
             {
@@ -78,11 +78,11 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             //request.Headers.Add("Accept-Encoding", "gzip, deflate, br");
             //request.Headers.Add("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7");
             //request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36");
-            //request.Headers.Add("X-CSRF-Token", Authent.AccessToken);
-            //request.Headers.Add("Token", Authent.AccessToken);
-            //request.Headers.Add("Access-token", Authent.AccessToken);
+            //request.Headers.Add("X-CSRF-Token", Authenticator.AccessToken);
+            //request.Headers.Add("Token", Authenticator.AccessToken);
+            //request.Headers.Add("Access-token", Authenticator.AccessToken);
             //content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
-            
+
             request.Content = content;
             request.Content.Headers.ContentLength = file.OriginalSize;
 

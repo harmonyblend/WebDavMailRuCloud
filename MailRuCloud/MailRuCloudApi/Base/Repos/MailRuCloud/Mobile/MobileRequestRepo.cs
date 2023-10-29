@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests;
 using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.Types;
@@ -19,33 +21,42 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(MobileRequestRepo));
 
+        private readonly SemaphoreSlim _connectionLimiter;
+
         public override HttpCommonSettings HttpSettings { get; } = new()
         {
             ClientId = "cloud-win",
             UserAgent = "CloudDiskOWindows 17.12.0009 beta WzBbt1Ygbm"
         };
 
-        public MobileRequestRepo(IWebProxy proxy, IAuth auth, int listDepth)
-            :base(new Credentials(auth.Login, auth.Password))
+        public MobileRequestRepo(CloudSettings settings, IWebProxy proxy, IAuth auth, int listDepth)
+            : base(new Credentials(auth.Login, auth.Password))
         {
-	        _listDepth = listDepth;
+            _connectionLimiter = new SemaphoreSlim(settings.MaxConnectionCount);
+            _listDepth = listDepth;
 
-			HttpSettings.Proxy = proxy;
+            HttpSettings.CloudSettings = settings;
+            HttpSettings.Proxy = proxy;
 
-            Authent = auth;
+            Authenticator = auth;
 
             _metaServer = new Cached<ServerRequestResult>(_ =>
                 {
                     Logger.Debug("MetaServer expired, refreshing.");
-                    var server = new MobMetaServerRequest(HttpSettings).MakeRequestAsync().Result;
+                    var server = new MobMetaServerRequest(HttpSettings).MakeRequestAsync(_connectionLimiter).Result;
                     return server;
                 },
                 _ => TimeSpan.FromSeconds(MetaServerExpiresSec));
 
+            ServicePointManager.DefaultConnectionLimit = int.MaxValue;
+
+            // required for Windows 7 breaking connection
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
+
             //_downloadServer = new Cached<ServerRequestResult>(old =>
             //    {
             //        Logger.Debug("DownloadServer expired, refreshing.");
-            //        var server = new GetServerRequest(HttpSettings).MakeRequestAsync().Result;
+            //        var server = new GetServerRequest(HttpSettings).MakeRequestAsync(_connectionLimiter).Result;
             //        return server;
             //    },
             //    value => TimeSpan.FromSeconds(DownloadServerExpiresSec));
@@ -76,14 +87,14 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
 
         //public HttpWebRequest DownloadRequest(long instart, long inend, File file, ShardInfo shard)
         //{
-        //    string url = $"{_downloadServer.Value.Url}{Uri.EscapeDataString(file.FullPath)}?token={Authent.AccessToken}&client_id={HttpSettings.ClientId}";
+        //    string url = $"{_downloadServer.Value.Url}{Uri.EscapeDataString(file.FullPath)}?token={Authenticator.AccessToken}&client_id={HttpSettings.ClientId}";
 
         //    var request = (HttpWebRequest)WebRequest.Create(url);
 
         //    request.Headers.Add("Accept-Ranges", "bytes");
         //    request.AddRange(instart, inend);
         //    request.Proxy = HttpSettings.Proxy;
-        //    request.CookieContainer = Authent.Cookies;
+        //    request.CookieContainer = Authenticator.Cookies;
         //    request.Method = "GET";
         //    request.ContentType = MediaTypeNames.Application.Octet;
         //    request.Accept = "*/*";
@@ -135,14 +146,15 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
             if (path.IsLink)
                 throw new NotImplementedException(nameof(FolderInfo));
 
-            var req = new ListRequest(HttpSettings, Authent, _metaServer.Value.Url, path.Path, _listDepth);
-            var res = await req.MakeRequestAsync();
+            var req = new ListRequest(HttpSettings, Authenticator, _metaServer.Value.Url, path.Path, _listDepth);
+            var res = await req.MakeRequestAsync(_connectionLimiter);
 
             switch (res.Item)
             {
                 case FsFolder fsFolder:
                 {
-                    var f = new Folder(fsFolder.Size == null ? 0 : (long)fsFolder.Size.Value, fsFolder.FullPath);
+                    var folder = new Folder(fsFolder.Size == null ? 0 : (long)fsFolder.Size.Value, fsFolder.FullPath);
+                    var children = new List<IEntry>();
                     foreach (var fsi in fsFolder.Items)
                     {
                         switch (fsi)
@@ -154,20 +166,21 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
                                     CreationTimeUtc = fsfi.ModifDate,
                                     LastWriteTimeUtc = fsfi.ModifDate
                                 };
-                                f.Files.TryAdd(fi.FullPath, fi);
+                                children.Add(fi);
                                 break;
                             }
                             case FsFolder fsfo:
                             {
                                 var fo = new Folder(fsfo.Size == null ? 0 : (long) fsfo.Size.Value, fsfo.FullPath);
-                                f.Folders.TryAdd(fo.FullPath, fo);
+                                children.Add(fo);
                                 break;
                             }
                             default:
                                 throw new Exception($"Unknown item type {fsi.GetType()}");
                         }
                     }
-                    return f;
+                    folder.Descendants = folder.Descendants.AddRange(children);
+                    return folder;
                 }
                 case FsFile fsFile:
                 {
@@ -193,7 +206,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
 
         public async Task<AccountInfoResult> AccountInfo()
         {
-            var req = await new AccountInfoRequest(HttpSettings, Authent).MakeRequestAsync();
+            var req = await new AccountInfoRequest(HttpSettings, Authenticator).MakeRequestAsync(_connectionLimiter);
             var res = req.ToAccountInfo();
             return res;
         }
@@ -217,8 +230,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
         {
             string target = WebDavPath.Combine(WebDavPath.Parent(fullPath), newName);
 
-            await new MoveRequest(HttpSettings, Authent, _metaServer.Value.Url, fullPath, target)
-                .MakeRequestAsync();
+            await new MoveRequest(HttpSettings, Authenticator, _metaServer.Value.Url, fullPath, target)
+                .MakeRequestAsync(_connectionLimiter);
             var res = new RenameResult { IsSuccess = true };
             return res;
         }
@@ -240,17 +253,20 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
 
         public async Task<CreateFolderResult> CreateFolder(string path)
         {
-            return (await new CreateFolderRequest(HttpSettings, Authent, _metaServer.Value.Url, path).MakeRequestAsync())
-                .ToCreateFolderResult();
+            var folerRequest = await new CreateFolderRequest(HttpSettings, Authenticator, _metaServer.Value.Url, path)
+                .MakeRequestAsync(_connectionLimiter);
+            return folerRequest.ToCreateFolderResult();
         }
 
         public async Task<AddFileResult> AddFile(string fileFullPath, IFileHash fileHash, FileSize fileSize, DateTime dateTime, ConflictResolver? conflictResolver)
         {
-            var res = await new MobAddFileRequest(HttpSettings, Authent, _metaServer.Value.Url,
+            var res = await new MobAddFileRequest(HttpSettings, Authenticator, _metaServer.Value.Url,
                     fileFullPath, fileHash.Hash.Value, fileSize, dateTime, conflictResolver)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             return res.ToAddFileResult();
         }
+
+        public async Task<CheckUpInfo> ActiveOperationsAsync() => await Task.FromResult<CheckUpInfo>(null);
     }
 }

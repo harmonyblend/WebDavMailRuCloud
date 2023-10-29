@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Net;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Tasks;
 using YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests;
 using YaR.Clouds.Base.Requests;
@@ -10,22 +11,22 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 {
     class YadWebAuth : IAuth
     {
-        public YadWebAuth(HttpCommonSettings settings, IBasicCredentials creds)
+        public YadWebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings, IBasicCredentials creds)
         {
             _settings = settings;
             _creds = creds;
             Cookies = new CookieContainer();
 
-            var _ = MakeLogin().Result;
+            var _ = MakeLogin(connectionLimiter).Result;
         }
 
         private readonly IBasicCredentials _creds;
         private readonly HttpCommonSettings _settings;
 
-        public async Task<bool> MakeLogin()
+        public async Task<bool> MakeLogin(SemaphoreSlim connectionLimiter)
         {
             var preAuthResult = await new YadPreAuthRequest(_settings, this)
-                .MakeRequestAsync();
+                .MakeRequestAsync(connectionLimiter);
             if (string.IsNullOrWhiteSpace(preAuthResult.Csrf))
                 throw new AuthenticationException($"{nameof(YadPreAuthRequest)} error parsing csrf");
             if (string.IsNullOrWhiteSpace(preAuthResult.ProcessUUID))
@@ -34,28 +35,28 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             Uuid = preAuthResult.ProcessUUID;
 
             var loginAuth = await new YadAuthLoginRequest(_settings, this, preAuthResult.Csrf, preAuthResult.ProcessUUID)
-                    .MakeRequestAsync();
+                    .MakeRequestAsync(connectionLimiter);
             if (loginAuth.HasError)
                 throw new AuthenticationException($"{nameof(YadAuthLoginRequest)} error");
 
             var passwdAuth = await new YadAuthPasswordRequest(_settings, this, preAuthResult.Csrf, loginAuth.TrackId)
-                .MakeRequestAsync();
+                .MakeRequestAsync(connectionLimiter);
             if (passwdAuth.HasError)
                 throw new AuthenticationException($"{nameof(YadAuthPasswordRequest)} errors: {passwdAuth.Errors.Aggregate((f,s) => f + "," + s)}");
 
 
             var accsAuth = await new YadAuthAccountsRequest(_settings, this, preAuthResult.Csrf)
-                .MakeRequestAsync();
+                .MakeRequestAsync(connectionLimiter);
             if (accsAuth.HasError)
                 throw new AuthenticationException($"{nameof(YadAuthAccountsRequest)} error");
 
             var askv2 = await new YadAuthAskV2Request(_settings, this,  accsAuth.Csrf, passwdAuth.DefaultUid)
-                .MakeRequestAsync();
+                .MakeRequestAsync(connectionLimiter);
             if (accsAuth.HasError)
                 throw new AuthenticationException($"{nameof(YadAuthAskV2Request)} error");
 
             var skReq = await new YadAuthDiskSkRequest(_settings, this)
-                .MakeRequestAsync();
+                .MakeRequestAsync(connectionLimiter);
             if (skReq.HasError)
                 throw new AuthenticationException($"{nameof(YadAuthDiskSkRequest)} error, response: {skReq.HtmlResponse}");
             DiskSk = skReq.DiskSk;

@@ -6,7 +6,7 @@ namespace YaR.Clouds
     public class PublishInfo
     {
         public const string SharedFilePostfix = ".share.wdmrc";
-        public const string PlaylistFilePostfix = ".m3u8";
+        public const string PlayListFilePostfix = ".m3u8";
 
         public List<PublishInfoItem> Items { get; }  = new();
         public DateTime DateTime { get; set; } = DateTime.Now;
@@ -16,6 +16,6 @@ namespace YaR.Clouds
     {
         public string Path { get; set; }
         public List<Uri> Urls { get; set; }
-        public string PlaylistUrl { get; set; }
+        public string PlayListUrl { get; set; }
     }
 }

@@ -1,9 +1,9 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using YaR.Clouds.Base.Repos.MailRuCloud;
 using YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models;
@@ -21,6 +21,8 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(YadWebRequestRepo));
 
+        private readonly SemaphoreSlim _connectionLimiter;
+
         private ItemOperation _lastRemoveOperation;
         
         private const int OperationStatusCheckIntervalMs = 300;
@@ -28,32 +30,31 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
         private readonly IBasicCredentials _creds;
 
-        public YadWebRequestRepo(CloudSettings settings, IWebProxy proxy, IBasicCredentials creds)
+        public YadWebRequestRepo(CloudSettings settings, IWebProxy proxy, IBasicCredentials credentials)
         {
-            ServicePointManager.DefaultConnectionLimit = int.MaxValue;
+            _connectionLimiter = new SemaphoreSlim(settings.MaxConnectionCount);
 
             HttpSettings = new()
             {
-                /*
-                 * Оригинальная версия содержит именно такую инициализацию.
-                 * Есть вероятность, что для этого user-agent Яндекс не выпендривается
-                 * и не начинает принудительно переводить на вход по СМС.
-                 */
-                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36",
-                //UserAgent = settings.UserAgent,
+                UserAgent = settings.UserAgent,
                 CloudSettings = settings,
+                Proxy = proxy,
             };
 
-            HttpSettings.Proxy = proxy;
-            _creds = creds;
+            _creds = credentials;
+
+            ServicePointManager.DefaultConnectionLimit = int.MaxValue;
+
+            // required for Windows 7 breaking connection
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
         }
 
         private async Task<Dictionary<string, IEnumerable<PublicLinkInfo>>> GetShareListInner()
         {
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadFolderInfoPostModel("/", "/published"),
                     out YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = folderInfo.Data.Resources
                 .Where(it => !string.IsNullOrEmpty(it.Meta?.UrlShort))
@@ -64,10 +65,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             return res;
         }
 
-        public IAuth Authent => CachedAuth.Value;
+        public IAuth Authenticator => CachedAuth.Value;
 
         private Cached<YadWebAuth> CachedAuth => _cachedAuth ??=
-                new Cached<YadWebAuth>(_ => new YadWebAuth(HttpSettings, _creds), _ => TimeSpan.FromHours(23));
+                new Cached<YadWebAuth>(_ => new YadWebAuth(_connectionLimiter, HttpSettings, _creds), _ => TimeSpan.FromHours(23));
         private Cached<YadWebAuth> _cachedAuth;
 
         public Cached<Dictionary<string, IEnumerable<PublicLinkInfo>>> CachedSharedList
@@ -87,17 +88,17 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             CustomDisposable<HttpWebResponse> ResponseGenerator(long instart, long inend, File file)
             {
-                //var urldata = new YadGetResourceUrlRequest(HttpSettings, (YadWebAuth)Authent, file.FullPath)
-                //    .MakeRequestAsync()
+                //var urldata = new YadGetResourceUrlRequest(HttpSettings, (YadWebAuth)Authenticator, file.FullPath)
+                //    .MakeRequestAsync(_connectionLimiter)
                 //    .Result;
 
-                var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+                var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                     .With(new YadGetResourceUrlPostModel(file.FullPath),
                         out YadResponseModel<ResourceUrlData, ResourceUrlParams> itemInfo)
-                    .MakeRequestAsync().Result;
+                    .MakeRequestAsync(_connectionLimiter).Result;
 
                 var url = "https:" + itemInfo.Data.File;
-                HttpWebRequest request = new YadDownloadRequest(HttpSettings, (YadWebAuth)Authent, url, instart, inend);
+                HttpWebRequest request = new YadDownloadRequest(HttpSettings, (YadWebAuth)Authenticator, url, instart, inend);
                 var response = (HttpWebResponse)request.GetResponse();
 
                 return new CustomDisposable<HttpWebResponse>
@@ -114,12 +115,12 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         //public HttpWebRequest UploadRequest(File file, UploadMultipartBoundary boundary)
         //{
         //    var urldata = 
-        //        new YadGetResourceUploadUrlRequest(HttpSettings, (YadWebAuth)Authent, file.FullPath, file.OriginalSize)
-        //        .MakeRequestAsync()
+        //        new YadGetResourceUploadUrlRequest(HttpSettings, (YadWebAuth)Authenticator, file.FullPath, file.OriginalSize)
+        //        .MakeRequestAsync(_connectionLimiter)
         //        .Result;
         //    var url = urldata.Models[0].Data.UploadUrl;
 
-        //    var result = new YadUploadRequest(HttpSettings, (YadWebAuth)Authent, url, file.OriginalSize);
+        //    var result = new YadUploadRequest(HttpSettings, (YadWebAuth)Authenticator, url, file.OriginalSize);
         //    return result;
         //}
 
@@ -134,12 +135,12 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         private HttpRequestMessage CreateUploadClientRequest(PushStreamContent content, File file)
         {
             var hash = (FileHashYad?) file.Hash;
-            var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadGetResourceUploadUrlPostModel(file.FullPath, file.OriginalSize, 
                         hash?.HashSha256.Value ?? string.Empty, 
                         hash?.HashMd5.Value ?? string.Empty),
                     out YadResponseModel<ResourceUploadUrlData, ResourceUploadUrlParams> itemInfo)
-                .MakeRequestAsync().Result;
+                .MakeRequestAsync(_connectionLimiter).Result;
             var url = itemInfo.Data.UploadUrl;
 
             var request = new HttpRequestMessage
@@ -188,6 +189,8 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             bool hasRemoveOp = _lastRemoveOperation != null &&
                                WebDavPath.IsParentOrSame(path.Path, _lastRemoveOperation.Path) &&
                                (DateTime.Now - _lastRemoveOperation.DateTime).TotalMilliseconds < 1_000;
+            Logger.Debug($"Listing path {path.Path}");
+
             Retry.Do(
                 () =>
                 {
@@ -196,11 +199,11 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                         Logger.Debug("Has remove op, sleep before");
                     return doPreSleep;
                 },
-                () => new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+                () => new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                     .With(new YadItemInfoPostModel(path.Path), out itemInfo)
-                    .With(new YadFolderInfoPostModel(path.Path), out folderInfo)
+                    .With(new YadFolderInfoPostModel(path.Path) { Amount = limit }, out folderInfo)
                     .With(new YadResourceStatsPostModel(path.Path), out resourceStats)
-                    .MakeRequestAsync()
+                    .MakeRequestAsync(_connectionLimiter)
                     .Result,
                 _ =>
                 {
@@ -217,79 +220,92 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             var itdata = itemInfo?.Data;
             switch (itdata?.Type)
             {
-                case null:
-                    return null;
-                case "file":
-                    return itdata.ToFile(PublicBaseUrlDefault);
-                default:
-                {
-                    var entry = folderInfo.Data.ToFolder(itemInfo.Data, resourceStats.Data, path.Path, PublicBaseUrlDefault);
-                    return entry;
-                }
+            case null:
+                return null;
+            case "file":
+                return itdata.ToFile(PublicBaseUrlDefault);
+            default:
+                Folder folder = folderInfo.Data.ToFolder(itemInfo.Data, resourceStats.Data, path.Path, PublicBaseUrlDefault);
+                folder.IsChildrenLoaded = true;
+                return folder;
             }
         }
 
 
         private async Task<IEntry> MediaFolderInfo(string path)
         {
-            if (await MediaFolderRootInfo() is not Folder root)
+            var entry = await MediaFolderRootInfo();
+
+            if (entry == null || entry is not Folder root)
                 return null;
-            
+
             if (WebDavPath.PathEquals(path, YadMediaPath))
                 return root;
 
-            //string albumName = WebDavPath.Name(path);
-            //var album = root.Folders.Values.FirstOrDefault(f => f.Name == albumName);
-            //if (null == album)
-            //    return null;
-            // Вариант без перебора предпочтительнее
-            if (!root.Folders.TryGetValue(path, out var album))
+            string albumName = WebDavPath.Name(path);
+            var child = entry.Descendants.FirstOrDefault(child => child.Name == albumName);
+            if (child is null)
                 return null;
+
+            var album = child;
 
             var key = album.PublicLinks.Values.FirstOrDefault()?.Key;
             if (key == null)
                 return null;
 
-            _ = new YaDCommonRequest(HttpSettings, (YadWebAuth)Authent)
+            _ = new YaDCommonRequest(HttpSettings, (YadWebAuth)Authenticator)
                 .With(new YadFolderInfoPostModel(key, "/album"),
                     out YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderInfo)
-                .MakeRequestAsync()
+                .MakeRequestAsync(_connectionLimiter)
                 .Result;
 
-            var entry = folderInfo.Data.ToFolder(null, null, path, PublicBaseUrlDefault);
+            Folder folder = folderInfo.Data.ToFolder(null, null, path, PublicBaseUrlDefault);
+            folder.IsChildrenLoaded = true;
 
-            return entry;
+            return folder;
         }
 
         private async Task<IEntry> MediaFolderRootInfo()
         {
-            var res = new Folder(YadMediaPath);
+            Folder res = new Folder(YadMediaPath);
 
-            _ = await new YaDCommonRequest(HttpSettings, (YadWebAuth)Authent)
+            _ = await new YaDCommonRequest(HttpSettings, (YadWebAuth)Authenticator)
                 .With(new YadGetAlbumsSlicesPostModel(),
                     out YadResponseModel<YadGetAlbumsSlicesRequestData, YadGetAlbumsSlicesRequestParams> slices)
                 .With(new YadAlbumsPostModel(),
                     out YadResponseModel<YadAlbumsRequestData[], YadAlbumsRequestParams> albums)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
+
+            var children = new List<IEntry>();
 
             if (slices.Data.Albums.Camera != null)
             {
-                Folder folder = new Folder($"{YadMediaPath}/.{slices.Data.Albums.Camera.Id}")
-                                    { ServerFilesCount = (int)slices.Data.Albums.Camera.Count };
-                res.Folders.TryAdd(folder.FullPath, folder);
+                Folder folder =
+                    new Folder($"{YadMediaPath}/.{slices.Data.Albums.Camera.Id}")
+                    {
+                        ServerFilesCount = (int)slices.Data.Albums.Camera.Count
+                    };
+                children.Add(folder);
             }
             if (slices.Data.Albums.Photounlim != null)
             {
-                Folder folder = new Folder($"{YadMediaPath}/.{slices.Data.Albums.Photounlim.Id}")
-                                    { ServerFilesCount = (int)slices.Data.Albums.Photounlim.Count };
-                res.Folders.TryAdd(folder.FullPath, folder);
+                Folder folder =
+                    new Folder($"{YadMediaPath}/.{slices.Data.Albums.Photounlim.Id}")
+                    {
+                        ServerFilesCount = (int)slices.Data.Albums.Photounlim.Count
+                    };
+                children.Add(folder);
             }
             if (slices.Data.Albums.Videos != null)
             {
-                Folder folder = new Folder($"{YadMediaPath}/.{slices.Data.Albums.Videos.Id}")
-                                    { ServerFilesCount = (int)slices.Data.Albums.Videos.Count };
-                res.Folders.TryAdd(folder.FullPath, folder);
+                Folder folder =
+                    new Folder($"{YadMediaPath}/.{slices.Data.Albums.Videos.Id}")
+                    {
+                        ServerFilesCount = (int)slices.Data.Albums.Videos.Count
+                    };
+                children.Add(folder);
             }
+            res.Descendants = res.Descendants.AddRange(children);
 
             foreach (var item in albums.Data)
             {
@@ -311,12 +327,12 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
         public async Task<AccountInfoResult> AccountInfo()
         {
-            //var req = await new YadAccountInfoRequest(HttpSettings, (YadWebAuth)Authent).MakeRequestAsync();
+            //var req = await new YadAccountInfoRequest(HttpSettings, (YadWebAuth)Authenticator).MakeRequestAsync(_connectionLimiter);
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadAccountInfoPostModel(),
                     out YadResponseModel<YadAccountInfoRequestData, YadAccountInfoRequestParams> itemInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = itemInfo.ToAccountInfo();
             return res;
@@ -324,13 +340,13 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
         public async Task<CreateFolderResult> CreateFolder(string path)
         {
-            //var req = await new YadCreateFolderRequest(HttpSettings, (YadWebAuth)Authent, path)
-            //    .MakeRequestAsync();
+            //var req = await new YadCreateFolderRequest(HttpSettings, (YadWebAuth)Authenticator, path)
+            //    .MakeRequestAsync(_connectionLimiter);
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadCreateFolderPostModel(path),
                     out YadResponseModel<YadCreateFolderRequestData, YadCreateFolderRequestParams> itemInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = itemInfo.Params.ToCreateFolderResult();
             return res;
@@ -341,10 +357,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             var hash = (FileHashYad?)fileHash;
 
-            var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            var _ = new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadGetResourceUploadUrlPostModel(fileFullPath, fileSize, hash?.HashSha256.Value, hash?.HashMd5.Value),
                     out YadResponseModel<ResourceUploadUrlData, ResourceUploadUrlParams> itemInfo)
-                .MakeRequestAsync().Result;
+                .MakeRequestAsync(_connectionLimiter).Result;
 
             var res = new AddFileResult
             {
@@ -364,13 +380,13 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             string destFullPath = WebDavPath.Combine(destinationPath, WebDavPath.Name(sourceFullPath));
 
-            //var req = await new YadCopyRequest(HttpSettings, (YadWebAuth)Authent, sourceFullPath, destFullPath)
-            //    .MakeRequestAsync();
+            //var req = await new YadCopyRequest(HttpSettings, (YadWebAuth)Authenticator, sourceFullPath, destFullPath)
+            //    .MakeRequestAsync(_connectionLimiter);
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadCopyPostModel(sourceFullPath, destFullPath),
                     out YadResponseModel<YadCopyRequestData, YadCopyRequestParams> itemInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = itemInfo.ToCopyResult();
             return res;
@@ -380,9 +396,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             string destFullPath = WebDavPath.Combine(destinationPath, WebDavPath.Name(sourceFullPath));
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadMovePostModel(sourceFullPath, destFullPath), out YadResponseModel<YadMoveRequestData, YadMoveRequestParams> itemInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = itemInfo.ToMoveResult();
 
@@ -394,12 +410,15 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
         private void WaitForOperation(string operationOid)
         {
+            if (string.IsNullOrWhiteSpace(operationOid))
+                return;
+
             YadResponseModel<YadOperationStatusData, YadOperationStatusParams> itemInfo = null;
             Retry.Do(
                 () => TimeSpan.Zero,
-                () => new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+                () => new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                     .With(new YadOperationStatusPostModel(operationOid), out itemInfo)
-                    .MakeRequestAsync()
+                    .MakeRequestAsync(_connectionLimiter)
                     .Result,
                 _ =>
                 {
@@ -413,9 +432,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
         public async Task<PublishResult> Publish(string fullPath)
         {
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadPublishPostModel(fullPath, false), out YadResponseModel<YadPublishRequestData, YadPublishRequestParams> itemInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = itemInfo.ToPublishResult();
 
@@ -433,9 +452,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 CachedSharedList.Value.Remove(item.Key);
             }
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadPublishPostModel(fullPath, true), out YadResponseModel<YadPublishRequestData, YadPublishRequestParams> itemInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = itemInfo.ToUnpublishResult();
 
@@ -444,13 +463,13 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
         public async Task<RemoveResult> Remove(string fullPath)
         {
-            //var req = await new YadDeleteRequest(HttpSettings, (YadWebAuth)Authent, fullPath)
-            //    .MakeRequestAsync();
+            //var req = await new YadDeleteRequest(HttpSettings, (YadWebAuth)Authenticator, fullPath)
+            //    .MakeRequestAsync(_connectionLimiter);
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadDeletePostModel(fullPath),
                     out YadResponseModel<YadDeleteRequestData, YadDeleteRequestParams> itemInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = itemInfo.ToRemoveResult();
                 
@@ -465,12 +484,12 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             string destPath = WebDavPath.Parent(fullPath);
             destPath = WebDavPath.Combine(destPath, newName);
 
-            //var req = await new YadMoveRequest(HttpSettings, (YadWebAuth)Authent, fullPath, destPath).MakeRequestAsync();
+            //var req = await new YadMoveRequest(HttpSettings, (YadWebAuth)Authenticator, fullPath, destPath).MakeRequestAsync(_connectionLimiter);
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadMovePostModel(fullPath, destPath),
                     out YadResponseModel<YadMoveRequestData, YadMoveRequestParams> itemInfo)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = itemInfo.ToRenameResult();
 
@@ -502,10 +521,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         
         public async void CleanTrash()
         {
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authent)
+            await new YaDCommonRequest(HttpSettings, (YadWebAuth) Authenticator)
                 .With(new YadCleanTrashPostModel(), 
                     out YadResponseModel<YadCleanTrashData, YadCleanTrashParams> _)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
         }
 
 
@@ -527,20 +546,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             throw new NotImplementedException("Yad not implemented ConvertToVideoLink");
         }
+
+        public async Task<CheckUpInfo> ActiveOperationsAsync() => await Task.FromResult<CheckUpInfo>(null);
     }
-
-    //public static class Zzz
-    //{
-    //    private static Stopwatch _sw = new Stopwatch();
-
-    //    static Zzz()
-    //    {
-    //        _sw.Start();
-    //    }
-
-    //    public static long ElapsedMs()
-    //    {
-    //        return _sw.ElapsedMilliseconds;
-    //    }
-    //}
 }

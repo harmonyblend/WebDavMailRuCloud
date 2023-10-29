@@ -6,11 +6,14 @@ using System.Threading.Tasks;
 using YaR.Clouds.Base;
 using YaR.Clouds.Base.Repos;
 using YaR.Clouds.Links;
+using YaR.Clouds.Common;
 
 namespace YaR.Clouds.SpecialCommands.Commands
 {
     public class ListCommand : SpecialCommand
     {
+        private const string FileListExtention = ".wdmrc.list.lst";
+
         //private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(FishCommand));
 
         public ListCommand(Cloud cloud, string path, IList<string> parameters) : base(cloud, path, parameters)
@@ -27,12 +30,12 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
             var resolvedTarget = await RemotePath.Get(target, Cloud.LinkManager);
 
-            var data = await Cloud.Account.RequestRepo.FolderInfo(resolvedTarget);
-            string resFilepath = WebDavPath.Combine(Path, data.Name + ".wdmrc.list.lst");
+            var entry = await Cloud.Account.RequestRepo.FolderInfo(resolvedTarget);
+            string resFilepath = WebDavPath.Combine(Path, string.Concat(entry.Name, FileListExtention));
 
             var sb = new StringBuilder();
 
-            foreach (var e in Flat(data, Cloud.LinkManager))
+            foreach (var e in Flat(entry, Cloud.LinkManager))
             {
                 string hash = (e as File)?.Hash.ToString() ?? "-";
                 string link = e.PublicLinks.Values.FirstOrDefault()?.Uri.OriginalString ?? "-";
@@ -49,24 +52,21 @@ namespace YaR.Clouds.SpecialCommands.Commands
         {
             yield return entry;
 
-            if (entry is Folder folder)
-            {
-                var ifolders = folder.Entries
-                    .AsParallel()
-                    .WithDegreeOfParallelism(5)
-                    .Select(it => it switch
-                    {
-                        File => it,
-                        Folder ifolder => ifolder.IsChildrenLoaded
-                            ? ifolder
-                            : Cloud.Account.RequestRepo.FolderInfo(RemotePath.Get(it.FullPath, lm).Result, depth: 3).Result,
-                        _ => throw new NotImplementedException("Unknown item type")
-                    })
-                    .OrderBy(it => it.Name);
-                    
-                foreach (var item in ifolders.SelectMany(f => Flat(f, lm)))
-                    yield return item;
-            }
+            var ifolders = entry.Descendants
+                .AsParallel()
+                .WithDegreeOfParallelism(5)
+                .Select(it => it switch
+                {
+                    File => it,
+                    Folder ifolder => ifolder.IsChildrenLoaded
+                        ? ifolder
+                        : Cloud.Account.RequestRepo.FolderInfo(RemotePath.Get(it.FullPath, lm).Result, depth: 3).Result,
+                    _ => throw new NotImplementedException("Unknown item type")
+                })
+                .OrderBy(it => it.Name);
+
+            foreach (var item in ifolders.SelectMany(f => Flat(f, lm)))
+                yield return item;
         }
     }
 }

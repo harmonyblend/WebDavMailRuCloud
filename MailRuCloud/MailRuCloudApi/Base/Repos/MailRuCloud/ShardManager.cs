@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests;
 using YaR.Clouds.Base.Requests.Types;
 using YaR.Clouds.Common;
@@ -12,14 +13,14 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(ShardManager));
 
-        public ShardManager(IRequestRepo repo)
+        public ShardManager(SemaphoreSlim connectionLimiter, IRequestRepo repo)
         {
             var httpsettings = repo.HttpSettings;
 
             _metaServer = new Cached<ServerRequestResult>(_ =>
                 {
                     Logger.Debug("Requesting new meta server");
-                    var server =  new MobMetaServerRequest(httpsettings).MakeRequestAsync().Result;
+                    var server =  new MobMetaServerRequest(httpsettings).MakeRequestAsync(connectionLimiter).Result;
                     return server;
                 },
                 _ => TimeSpan.FromSeconds(MetaServerExpiresSec));
@@ -36,7 +37,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             DownloadServersPending = new Pending<Cached<ServerRequestResult>>(8,
                 () => new Cached<ServerRequestResult>(_ =>
                     {
-                        var server = new GetServerRequest(httpsettings).MakeRequestAsync().Result;
+                        var server = new GetServerRequest(httpsettings).MakeRequestAsync(connectionLimiter).Result;
                         Logger.Debug($"Download server changed to {server.Url}");
                         return server;
                     },
@@ -45,7 +46,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
             UploadServer = new Cached<ShardInfo>(_ =>
                 {
-                    var server = new GetUploadServerRequest(httpsettings).MakeRequestAsync().Result;
+                    var server = new GetUploadServerRequest(httpsettings).MakeRequestAsync(connectionLimiter).Result;
                     Logger.Debug($"Upload server changed to {server.Url}");
                     return new ShardInfo { Count = 0, Type = ShardType.Upload, Url = server.Url };
                 },
@@ -55,7 +56,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             WeblinkDownloadServersPending = new Pending<Cached<ServerRequestResult>>(8,
                 () => new Cached<ServerRequestResult>(_ =>
                     {
-                        var data = new WeblinkGetServerRequest(httpsettings).MakeRequestAsync().Result;
+                        var data = new WeblinkGetServerRequest(httpsettings).MakeRequestAsync(connectionLimiter).Result;
                         var serverUrl = data.Body.WeblinkGet[0].Url;
                         Logger.Debug($"weblink Download server changed to {serverUrl}");
                         var res = new ServerRequestResult { Url = serverUrl };

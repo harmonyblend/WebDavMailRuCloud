@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using YaR.Clouds.Base;
 using YaR.Clouds.XTSSharp;
@@ -22,22 +21,22 @@ namespace YaR.Clouds.Streams
 
         public async Task<Stream> Create(File file, FileUploadedDelegate onUploaded = null, bool discardEncryption = false)
         {
-            if (await _cloud.GetItemAsync(file.Path, Cloud.ItemType.Folder) is not Folder folder)
+            string folderPath = file.Path;
+            IEntry entry = await _cloud.GetItemAsync(file.Path, Cloud.ItemType.Folder);
+            if(entry is null || entry is not Folder folder)
                 throw new DirectoryNotFoundException(file.Path);
 
             Stream stream;
 
-            bool cryptRequired = _cloud.IsFileExists(CryptFileInfo.FileName, WebDavPath.GetParents(folder.FullPath));
+            string fullPath = _cloud.Find(CryptFileInfo.FileName, WebDavPath.GetParents(folder.FullPath).ToArray());
+            bool cryptRequired = !string.IsNullOrEmpty(fullPath);
             if (cryptRequired && !discardEncryption)
             {
                 if (!_cloud.Account.Credentials.CanCrypt)
                     throw new Exception($"Cannot upload {file.FullPath} to crypt folder without additional password!");
 
                 // #142 remove crypted file parts if size changed
-                if (folder.Files.TryGetValue(file.FullPath, out var remoteFile))
-                {
-                    await _cloud.Remove(remoteFile);
-                }
+                await _cloud.Remove(file.FullPath);
                 
                 stream = GetCryptoStream(file, onUploaded);
             }

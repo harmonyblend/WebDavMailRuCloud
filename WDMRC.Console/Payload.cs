@@ -49,7 +49,8 @@ namespace YaR.Clouds.Console
                 UserAgent = ConstructUserAgent(options.UserAgent, Config.DefaultUserAgent),
                 SecChUa = ConstructSecChUa( options.SecChUa, Config.DefaultSecChUa),
                 CacheListingSec = options.CacheListingSec,
-	            ListDepth = options.CacheListingDepth,
+                MaxConnectionCount = options.MaxConnectionCount,
+                ListDepth = options.CacheListingDepth,
                 AdditionalSpecialCommandPrefix = Config.AdditionalSpecialCommandPrefix,
                 DefaultSharedVideoResolution = Config.DefaultSharedVideoResolution,
                 UseLocks = options.UseLocks,
@@ -213,12 +214,13 @@ namespace YaR.Clouds.Console
             Logger.Info($"User interactive: {Environment.UserInteractive}");
             Logger.Info($"Version: {version}");
             Logger.Info($"Using proxy: {options.ProxyAddress}");
-            Logger.Info($"Max threads count: {options.MaxThreadCount}");
+            Logger.Info($"Max listening threads count: {options.MaxThreadCount}");
+            Logger.Info($"Max cloud connections count: {options.MaxConnectionCount}");
             Logger.Info($"Cloud server response timeout: {options.WaitResponseTimeoutSec} sec");
             Logger.Info($"Cloud download/upload timeout: {options.ReadWriteTimeoutSec} sec");
             Logger.Info($"Wait for 100-Continue timeout: {options.Wait100ContinueTimeoutSec} sec");
             Logger.Info($"Cloud protocol: {options.Protocol}");
-            Logger.Info($"Duration of in-memory cache of folder's listing: {options.CacheListingSec} sec");
+            Logger.Info($"Folder cache expiration timeout: {options.CacheListingSec} sec");
             Logger.Info($"List query folder depth: {options.CacheListingDepth}");
             Logger.Info($"Use locks: {options.UseLocks}");
             Logger.Info($"Support links in /item.links.wdmrc: {(!options.DisableLinkManager)}");

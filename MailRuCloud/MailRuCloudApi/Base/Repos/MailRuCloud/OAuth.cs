@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests;
 using YaR.Clouds.Base.Requests;
@@ -12,14 +13,17 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(OAuth));
 
+        private readonly SemaphoreSlim _connectionLimiter;
         private readonly HttpCommonSettings _settings;
         private readonly IBasicCredentials _creds;
 
         private readonly AuthCodeRequiredDelegate _onAuthCodeRequired;
 
-        public OAuth(HttpCommonSettings settings, IBasicCredentials creds, AuthCodeRequiredDelegate onAuthCodeRequired)
+        public OAuth(SemaphoreSlim connectionLimiter,
+            HttpCommonSettings settings, IBasicCredentials creds, AuthCodeRequiredDelegate onAuthCodeRequired)
         {
             _settings = settings;
+            _connectionLimiter = connectionLimiter;
             _creds = creds;
             _onAuthCodeRequired = onAuthCodeRequired;
             Cookies = new CookieContainer();
@@ -59,7 +63,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             if (_creds.IsAnonymous)
                 return null;
 
-            var req = await new OAuthRequest(_settings, _creds).MakeRequestAsync();
+            var req = await new OAuthRequest(_settings, _creds).MakeRequestAsync(_connectionLimiter);
             var res = req.ToAuthTokenResult();
 
             if (!res.IsSecondStepRequired) 
@@ -73,7 +77,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
                 throw new Exception("Empty 2Factor code");
 
             var ssreq = await new OAuthSecondStepRequest(_settings, _creds.Login, res.TsaToken, code)
-                .MakeRequestAsync();
+                .MakeRequestAsync(_connectionLimiter);
 
             res = ssreq.ToAuthTokenResult();
 
@@ -82,7 +86,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
         private async Task<AuthTokenResult> Refresh(string refreshToken)
         {
-            var req = await new OAuthRefreshRequest(_settings, refreshToken).MakeRequestAsync();
+            var req = await new OAuthRefreshRequest(_settings, refreshToken).MakeRequestAsync(_connectionLimiter);
             var res = req.ToAuthTokenResult(refreshToken);
             return res;
         }

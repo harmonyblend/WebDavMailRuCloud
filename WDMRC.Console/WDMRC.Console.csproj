@@ -60,6 +60,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Properties\launchSettings.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
     <None Update="wdmrc.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

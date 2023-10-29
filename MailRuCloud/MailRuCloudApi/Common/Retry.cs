@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 
 namespace YaR.Clouds.Common
@@ -55,6 +56,34 @@ namespace YaR.Clouds.Common
                     res = action();
                     if (!retryIf(res))
                         return res;
+            }
+
+            return res;
+        }
+
+        public static T Do<T>(
+            Func<TimeSpan> sleepBefore,
+            Func<T> action,
+            Func<T, bool> retryIf,
+            TimeSpan retryInterval,
+            TimeSpan? retryTimeout = null)
+        {
+            retryTimeout ??= TimeSpan.FromSeconds(15);
+
+            var sleep = sleepBefore();
+            if (sleep > TimeSpan.Zero)
+                Thread.Sleep(sleep);
+
+            var watch = Stopwatch.StartNew();
+            T res = default;
+            for (int attempted = 0; watch.Elapsed < retryTimeout; attempted++)
+            {
+                if (attempted > 0)
+                    Thread.Sleep(retryInterval);
+
+                res = action();
+                if (!retryIf(res))
+                    return res;
             }
 
             return res;

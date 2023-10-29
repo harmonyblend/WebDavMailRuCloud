@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models;
@@ -16,11 +17,11 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(YadWebAuth));
 
-        public YadWebAuth(HttpCommonSettings settings, IBasicCredentials creds)
+        public YadWebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings, IBasicCredentials credentials)
         {
 
             _settings = settings;
-            _creds = creds;
+            _creds = credentials;
             Cookies = new CookieContainer();
             bool doRegularLogin = true;
 
@@ -35,23 +36,23 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
                     // Check file with cookies is created
                     path = Path.Combine(
                         settings.CloudSettings.BrowserAuthenticatorCacheDir,
-                        creds.Login);
+                        credentials.Login);
 
                     if (System.IO.File.Exists(path))
                     {
-                        var testAuthent = new YadWebAuth(_settings, _creds, path);
+                        var testAuthenticator = new YadWebAuth(_settings, _creds, path);
                         // Try to get user info using cached cookie
-                        new YaDCommonRequest(_settings, testAuthent)
+                        new YaDCommonRequest(_settings, testAuthenticator)
                             .With(new YadAccountInfoPostModel(),
                                 out YadResponseModel<YadAccountInfoRequestData, YadAccountInfoRequestParams> itemInfo)
-                            .MakeRequestAsync().Wait();
+                            .MakeRequestAsync(connectionLimiter).Wait();
 
                         var res = itemInfo.ToAccountInfo();
 
                         // Request for user info using cached cookie finished successfully
-                        Cookies = testAuthent.Cookies;
-                        DiskSk = testAuthent.DiskSk;
-                        Uuid = testAuthent.Uuid;
+                        Cookies = testAuthenticator.Cookies;
+                        DiskSk = testAuthenticator.DiskSk;
+                        Uuid = testAuthenticator.Uuid;
                         doRegularLogin = false;
                         Logger.Info($"Authentication refreshed using cached cookie");
                     }
@@ -78,10 +79,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
             }
         }
 
-        public YadWebAuth(HttpCommonSettings settings, IBasicCredentials creds, string path)
+        public YadWebAuth(HttpCommonSettings settings, IBasicCredentials credentials, string path)
         {
             _settings = settings;
-            _creds = creds;
+            _creds = credentials;
             Cookies = new CookieContainer();
 
             string content = System.IO.File.ReadAllText(path);

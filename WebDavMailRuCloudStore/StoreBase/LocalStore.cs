@@ -29,17 +29,18 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
         public async Task<IStoreItem> GetItemAsync(WebDavUri uri, IHttpContext httpContext)
         {
-            var identity = (HttpListenerBasicIdentity)httpContext.Session.Principal.Identity;
             var path = uri.Path;
             
             try
             {
-                var item = await CloudManager.Instance(identity).GetItemAsync(path);
-                if (item != null)
+                var entry = await CloudManager
+                    .Instance(httpContext.Session.Principal.Identity)
+                    .GetItemAsync(path);
+                if (entry is not null)
                 {
-                    return item.IsFile
-                        ? new LocalStoreItem((File)item, IsWritable, this)
-                        : new LocalStoreCollection(httpContext, (Folder)item, IsWritable, this);
+                    return entry.IsFile
+                        ? new LocalStoreItem((File)entry, IsWritable, this)
+                        : new LocalStoreCollection(httpContext, (Folder)entry, IsWritable, this);
                 }
             }
             // ReSharper disable once RedundantCatchClause
@@ -57,11 +58,16 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         {
             var path = uri.Path;
 
-            var item = await CloudManager
+            var entry = await CloudManager
                 .Instance(httpContext.Session.Principal.Identity)
                 .GetItemAsync(path, Cloud.ItemType.Folder);
-
-            return item == null ? null : new LocalStoreCollection(httpContext, (Folder)item, IsWritable, this);
+            if (entry != null)
+            {
+                if (entry.IsFile)
+                    throw new Exception("File from cloud is processed as a folder");
+                return new LocalStoreCollection(httpContext, (Folder)entry, IsWritable, this);
+            }
+            return null;
         }
     }
 }

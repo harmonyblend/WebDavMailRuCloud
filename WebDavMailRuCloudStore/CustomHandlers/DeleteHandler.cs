@@ -52,7 +52,7 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
                 return true;
             }
 
-            // Obtain the item that actually is deleted
+            // Obtain the item that actually is being deleted
             var deleteItem = await parentCollection.GetItemAsync(splitUri.Name, httpContext).ConfigureAwait(false);
             if (deleteItem == null)
             {

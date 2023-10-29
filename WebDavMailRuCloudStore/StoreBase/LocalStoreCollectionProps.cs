@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using NWebDav.Server;
 using NWebDav.Server.Props;
 using YaR.Clouds.WebDavStore.CustomProperties;
+using YaR.Clouds.Base;
 
 namespace YaR.Clouds.WebDavStore.StoreBase
 {
@@ -29,7 +30,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 new DavGetEtag<T>
                 {
-                    Getter = (_, item) => item.CalculateEtag()
+                    Getter = (_, item) => item.CalculateETag()
                 },
 
                 //new DavBsiisreadonly<LocalStoreCollection>
@@ -62,41 +63,41 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 new DavQuotaUsedBytes<T>
                 {
-                    Getter = (_, collection) => 
-                        collection.DirectoryInfo.Size
+                    Getter = (_, collection) =>
+                        collection.FolderWithDescendants.Size
                     //IsExpensive = true  //folder listing performance
                 },
 
                 // RFC-2518 properties
                 new DavCreationDate<T>
                 {
-                    Getter = (_, collection) => collection.DirectoryInfo.CreationTimeUtc,
+                    Getter = (_, collection) => collection.FolderWithDescendants.CreationTimeUtc,
                     Setter = (_, collection, value) =>
                     {
-                        collection.DirectoryInfo.CreationTimeUtc = value;
+                        (collection.FolderWithDescendants as Folder).CreationTimeUtc = value;
                         return DavStatusCode.Ok;
                     }
                 },
                 new DavDisplayName<T>
                 {
-                    Getter = (_, collection) => collection.DirectoryInfo.Name
+                    Getter = (_, collection) => collection.FolderWithDescendants.Name
                 },
                 new DavGetLastModified<T>
                 {
-                    Getter = (_, collection) => collection.DirectoryInfo.LastWriteTimeUtc,
+                    Getter = (_, collection) => (collection.FolderWithDescendants as Folder).LastWriteTimeUtc,
                     Setter = (_, collection, value) =>
                     {
-                        collection.DirectoryInfo.LastWriteTimeUtc = value;
+                        (collection.FolderWithDescendants as Folder).LastWriteTimeUtc = value;
                         return DavStatusCode.Ok;
                     }
                 },
 
                 new DavLastAccessed<T>
                 {
-                    Getter = (_, collection) => collection.DirectoryInfo.LastWriteTimeUtc,
+                    Getter = (_, collection) => (collection.FolderWithDescendants as Folder).LastWriteTimeUtc,
                     Setter = (_, collection, value) =>
                     {
-                        collection.DirectoryInfo.LastWriteTimeUtc = value;
+                        (collection.FolderWithDescendants as Folder).LastWriteTimeUtc = value;
                         return DavStatusCode.Ok;
                     }
                 },
@@ -121,14 +122,9 @@ namespace YaR.Clouds.WebDavStore.StoreBase
                 {
                     Getter = (_, collection) =>
                     {
-                        var info = collection.DirectoryInfo;
-                        return (info.Folders.IsEmpty
-                                ? (info.ServerFoldersCount ?? 0)
-                                : info.Folders.Count)
-                               +
-                               (info.Files.IsEmpty
-                                ? (info.ServerFilesCount ?? 0)
-                                : info.Files.Count);
+                        var folder = collection.FolderWithDescendants as Folder;
+                        return Math.Max(collection.FolderWithDescendants.Descendants.Count,
+                            (folder.ServerFoldersCount ?? 0) + (folder.ServerFilesCount ?? 0));
                     }
                 },
                 new DavExtCollectionIsFolder<T>
@@ -146,7 +142,9 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 new DavExtCollectionHasSubs<T> //Identifies whether this collection contains any collections which are folders (see "isfolder").
                 {
-                    Getter = (_, collection) => !collection.DirectoryInfo.Folders.IsEmpty || collection.DirectoryInfo.ServerFoldersCount > 0
+                    Getter = (_, collection)
+                        => ((collection.FolderWithDescendants as Folder)?.ServerFoldersCount ?? 0)> 0
+                        || collection.FolderWithDescendants.Descendants.Any(x=>x is Folder)
                 },
 
                 new DavExtCollectionNoSubs<T> //Identifies whether this collection allows child collections to be created.
@@ -156,10 +154,9 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 new DavExtCollectionObjectCount<T> //To count the number of non-folder resources in the collection.
                 {
-                    Getter = (_, collection) =>
-                        !collection.DirectoryInfo.Files.IsEmpty
-                            ? collection.DirectoryInfo.Files.Count
-                            : collection.DirectoryInfo.ServerFilesCount ?? 0
+                    Getter = (_, collection) => collection.FolderWithDescendants is Folder folder
+                        ? Math.Max(folder.ServerFilesCount ?? 0, collection.FolderWithDescendants.Descendants.Count(x=>x.IsFile))
+                        : 0
                 },
 
                 new DavExtCollectionReserved<T>
@@ -169,52 +166,51 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 new DavExtCollectionVisibleCount<T>  //Counts the number of visible non-folder resources in the collection.
                 {
-                    Getter = (_, collection) =>
-                        !collection.DirectoryInfo.Files.IsEmpty
-                            ? collection.DirectoryInfo.Files.Count
-                            : collection.DirectoryInfo.ServerFilesCount ?? 0
+                    Getter = (_, collection) => collection.FolderWithDescendants is Folder folder
+                        ? Math.Max(folder.ServerFilesCount ?? 0, collection.FolderWithDescendants.Descendants.Count(x=>x.IsFile))
+                        : 0
                 },
 
                 // Win32 extensions
                 new Win32CreationTime<T>
                 {
-                    Getter = (_, collection) => collection.DirectoryInfo.CreationTimeUtc,
+                    Getter = (_, collection) => (collection.FolderWithDescendants as Folder).CreationTimeUtc,
                     Setter = (_, collection, value) =>
                     {
-                        collection.DirectoryInfo.CreationTimeUtc = value;
+                        (collection.FolderWithDescendants as Folder).CreationTimeUtc = value;
                         return DavStatusCode.Ok;
                     }
                 },
                 new Win32LastAccessTime<T>
                 {
-                    Getter = (_, collection) => collection.DirectoryInfo.LastAccessTimeUtc,
+                    Getter = (_, collection) => (collection.FolderWithDescendants as Folder).LastAccessTimeUtc,
                     Setter = (_, collection, value) =>
                     {
-                        collection.DirectoryInfo.LastAccessTimeUtc = value;
+                        (collection.FolderWithDescendants as Folder).LastAccessTimeUtc = value;
                         return DavStatusCode.Ok;
                     }
                 },
                 new Win32LastModifiedTime<T>
                 {
-                    Getter = (_, collection) => collection.DirectoryInfo.LastWriteTimeUtc,
+                    Getter = (_, collection) => (collection.FolderWithDescendants as Folder).LastWriteTimeUtc,
                     Setter = (_, collection, value) =>
                     {
-                        collection.DirectoryInfo.LastWriteTimeUtc = value;
+                        (collection.FolderWithDescendants as Folder).LastWriteTimeUtc = value;
                         return DavStatusCode.Ok;
                     }
                 },
                 new Win32FileAttributes<T>
                 {
-                    Getter = (_, collection) =>  collection.DirectoryInfo.Attributes,
+                    Getter = (_, collection) => (collection.FolderWithDescendants as Folder).Attributes,
                     Setter = (_, collection, value) =>
                     {
-                        collection.DirectoryInfo.Attributes = value;
+                        (collection.FolderWithDescendants as Folder).Attributes = value;
                         return DavStatusCode.Ok;
                     }
                 },
                 new DavGetContentLength<T>
                 {
-                    Getter = (_, item) => item.DirectoryInfo.Size
+                    Getter = (_, collection) => (collection.FolderWithDescendants as Folder).Size
                 },
                 new DavGetContentType<T>
                 {
@@ -222,7 +218,8 @@ namespace YaR.Clouds.WebDavStore.StoreBase
                 },
                 new DavSharedLink<T>
                 {
-                    Getter = (_, item) => item.DirectoryInfo.PublicLinks.Values.FirstOrDefault()?.Uri.OriginalString ?? string.Empty,
+                    Getter = (_, collection) => (collection.FolderWithDescendants as Folder)
+                        .PublicLinks.Values.FirstOrDefault()?.Uri.OriginalString ?? string.Empty,
                     Setter = (_, _, _) => DavStatusCode.Ok
                 }
             };
@@ -231,6 +228,6 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         }
 
         public IEnumerable<DavProperty<T>> Props => _props;
-        private readonly DavProperty<T>[]  _props;
+        private readonly DavProperty<T>[] _props;
     }
 }

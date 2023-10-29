@@ -34,17 +34,7 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
             // We should always move the item from a parent container
             var splitSourceUri = RequestHelper.SplitUri(request.Url);
 
-            // Obtain source collection
-            var sourceCollection = await store.GetCollectionAsync(splitSourceUri.CollectionUri, httpContext).ConfigureAwait(false);
-            if (sourceCollection == null)
-            {
-                // Source not found
-                response.SetStatus(DavStatusCode.NotFound);
-                return true;
-            }
-
             // Obtain the destination
-            //var destinationUri = request.GetDestinationUri();
             var destinationUri = GetDestinationUri(request);
             if (destinationUri == null)
             {
@@ -64,8 +54,22 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
             // We should always move the item to a parent
             var splitDestinationUri = RequestHelper.SplitUri(destinationUri);
 
+            // Obtain source collection
+            var sourceCollection = await store.GetCollectionAsync(splitSourceUri.CollectionUri, httpContext).ConfigureAwait(false);
+            if (sourceCollection == null)
+            {
+                // Source not found
+                response.SetStatus(DavStatusCode.NotFound);
+                return true;
+            }
+
             // Obtain destination collection
-            var destinationCollection = await store.GetCollectionAsync(splitDestinationUri.CollectionUri, httpContext).ConfigureAwait(false);
+            var destinationCollection =
+                splitDestinationUri.CollectionUri.AbsoluteUri.Equals(
+                    splitSourceUri.CollectionUri.AbsoluteUri, StringComparison.InvariantCultureIgnoreCase)
+                // If source and destination collections are the same, there is no need to request a server twice
+                ? sourceCollection
+                : await store.GetCollectionAsync(splitDestinationUri.CollectionUri, httpContext).ConfigureAwait(false);
             if (destinationCollection == null)
             {
                 // Source not found
@@ -80,7 +84,8 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
             var errors = new UriResultCollection();
 
             // Move collection
-            await MoveAsync(sourceCollection, splitSourceUri.Name, destinationCollection, splitDestinationUri.Name, overwrite, httpContext, splitDestinationUri.CollectionUri, errors).ConfigureAwait(false);
+            await MoveAsync(sourceCollection, splitSourceUri.Name, destinationCollection,
+                splitDestinationUri.Name, overwrite, httpContext, splitDestinationUri.CollectionUri, errors).ConfigureAwait(false);
 
             // Check if there are any errors
             if (errors.HasItems)

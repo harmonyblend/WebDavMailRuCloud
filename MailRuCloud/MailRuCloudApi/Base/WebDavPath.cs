@@ -29,6 +29,8 @@ namespace YaR.Clouds.Base
                     right.Remove(right.Length - 1, 1);
                 return right.ToString();
             }
+            if (a == Root)
+                return right.ToString();
 
             StringBuilder left = CleanSb(a, false);
 
@@ -116,11 +118,60 @@ namespace YaR.Clouds.Base
             return IsParent(parent, child, true);
         }
 
-        public static bool IsParent(string parent, string child, bool selfTrue = false)
+        public static bool IsParent(string parent, string child, bool selfTrue = false, bool oneLevelDistanceOnly = false)
         {
-            parent = Clean(parent, true);
-            child = Clean(child, true);
-            return child.StartsWith(parent) && (selfTrue || parent.Length != child.Length);
+            if (child.Equals(parent, StringComparison.InvariantCultureIgnoreCase))
+                return selfTrue;
+
+            if (parent.Length > child.Length)
+                return false;
+
+            if (parent == Root)
+            {
+                // Если родитель=root, то любой путь будет потомком, если не брать только ближайший уровень
+                if (!oneLevelDistanceOnly)
+                    return true;
+                // Если уровень только ближайший нужен,
+                // то после части, совпадающей с родителем, не должно быть /,
+                // исключение - / в виде последнего символа
+                int slash = child.IndexOf(Separator, parent.Length, StringComparison.Ordinal);
+                return slash < 0 || slash == child.Length - 1;
+            }
+
+            // Части потомка и родителя должны совпадать, и потомок должен быть длиннее
+            if (parent.Length < child.Length &&
+                child.StartsWith(parent, StringComparison.InvariantCultureIgnoreCase))
+            {
+                int start;
+                // Если у родителя последний символ был /, то у потомка следующий символ не должен быть /
+                if (child[parent.Length - 1] == '/' && child[parent.Length] != '/')
+                    start = parent.Length;
+                else
+                // Если у родителя последний символ был не /, то у потомка следующий символ должен быть /
+                if (child[parent.Length - 1] != '/' && child[parent.Length] == '/')
+                    start = parent.Length + 1;
+                else
+                {
+                    // Тут какая-то ерунду с символами, это не родитель и потоком
+                    return false;
+                }
+                int end = child[child.Length - 1] == '/' ? child.Length - 1 : child.Length;
+
+                // Исключая возможный / в конце и исключая часть, совпадающую с родителем,
+                // исключая / после родителя, от start, включая, до end, исключая (как для substring),
+                // будет текст пути потомка.
+                if (start >= end)
+                    return false;
+
+                // Если уровень потомка не важен, то уже true.
+                if (!oneLevelDistanceOnly)
+                    return true;
+
+                // Если уровень потомка важен, то в интервале еще и символ / должен находиться.
+                int slash = child.IndexOf(Separator, start, end - start, StringComparison.Ordinal);
+                return slash < 0;
+            }
+            return false;
         }
 
         public static WebDavPathParts Parts(string path)

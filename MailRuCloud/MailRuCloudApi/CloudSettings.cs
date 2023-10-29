@@ -16,7 +16,9 @@ namespace YaR.Clouds
 
         public int CacheListingSec { get; set; } = 30;
 
-	    public int ListDepth
+        public int MaxConnectionCount { get; set; } = 10;
+
+        public int ListDepth
 	    {
 		    get => CacheListingSec > 0 ? _listDepth : 1;
 	        set => _listDepth = value;

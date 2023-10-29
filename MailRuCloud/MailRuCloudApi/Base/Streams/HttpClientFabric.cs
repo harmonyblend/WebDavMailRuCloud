@@ -17,7 +17,7 @@ namespace YaR.Clouds.Base.Streams
                     {
                         UseProxy = true,
                         Proxy = account.RequestRepo.HttpSettings.Proxy,
-                        CookieContainer = account.RequestRepo.Authent.Cookies,
+                        CookieContainer = account.RequestRepo.Authenticator.Cookies,
                         UseCookies = true,
                         AllowAutoRedirect = true,
                         MaxConnectionsPerServer = int.MaxValue

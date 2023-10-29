@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 
 namespace YaR.Clouds.Base
 {
@@ -11,5 +12,6 @@ namespace YaR.Clouds.Base
         string FullPath { get; }
         DateTime CreationTimeUtc { get; }
         ConcurrentDictionary<string, PublicLinkInfo> PublicLinks { get; }
+        ImmutableList<IEntry> Descendants { get; }
     }
 }

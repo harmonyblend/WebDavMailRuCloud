@@ -1,11 +1,12 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using YaR.Clouds.Base.Requests.Types;
 using YaR.Clouds.Extensions;
 using YaR.Clouds.Links;
+using YaR.Clouds.Common;
+using System.Collections.Immutable;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud
 {
@@ -196,64 +197,54 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
         public static IEntry ToEntry(this FolderInfoResult data, string publicBaseUrl)
         {
             if (data.Body.Kind == "file")
-            {
-                var file = data.ToFile(publicBaseUrl);
-                return file;
-            }
+                return data.ToFile(publicBaseUrl);
 
-            var folder = new Folder(data.Body.Size, WebDavPath.Combine(data.Body.Home ?? WebDavPath.Root, data.Body.Name))
-            {
-                Folders = data.Body.List.ToFolderDictionary(publicBaseUrl),
-                Files = data.Body.List.ToFileDictionary(publicBaseUrl),
-            };
+            var folder = new Folder(data.Body.Size, WebDavPath.Combine(data.Body.Home ?? WebDavPath.Root, data.Body.Name));
 
+            var children = new List<IEntry>();
+            children.AddRange(
+                data.Body.List
+                    .Where(it => it.Kind == "file")
+                    .Select(item => item.ToFile(publicBaseUrl, ""))
+                    .ToGroupedFiles()
+                    .Select(f => f));
+            children.AddRange(
+                data.Body.List
+                    .Where(it => FolderKinds.Contains(it.Kind))
+                    .Select(item => item.ToFolder(publicBaseUrl))
+                    .Select(f => f));
 
+            folder.Descendants = folder.Descendants.AddRange(children);
             return folder;
         }
-
 
         public static Folder ToFolder(this FolderInfoResult data, string publicBaseUrl, string home = null, Link link = null)
         {
             PatchEntryPath(data, home, link);
 
-            var folder = new Folder(data.Body.Size, data.Body.Home ?? data.Body.Name, data.Body.Weblink.ToPublicLinkInfos(publicBaseUrl))
-            {
-                ServerFoldersCount = data.Body.Count?.Folders,
-                ServerFilesCount = data.Body.Count?.Files,
+            var body = data.Body;
 
-                Folders = data.Body.List.ToFolderDictionary(publicBaseUrl),
-                Files = data.Body.List.ToFileDictionary(publicBaseUrl),
-                IsChildrenLoaded = true
+            var folder = new Folder(body.Size, body.Home ?? body.Name, body.Weblink.ToPublicLinkInfos(publicBaseUrl))
+            {
+                ServerFoldersCount = body.Count?.Folders,
+                ServerFilesCount = body.Count?.Files,
             };
 
+            var children = new List<IEntry>();
+            children.AddRange(
+                body.List
+                    .Where(it => it.Kind == "file")
+                    .Select(item => item.ToFile(publicBaseUrl, ""))
+                    .ToGroupedFiles()
+                    .Select(f => f));
+            children.AddRange(
+                body.List
+                    .Where(it => FolderKinds.Contains(it.Kind))
+                    .Select(item => item.ToFolder(publicBaseUrl))
+                    .Select(f => f));
+
+            folder.Descendants = folder.Descendants.AddRange(children);
             return folder;
-        }
-
-        public static ConcurrentDictionary<string, Folder> ToFolderDictionary(
-            this List<FolderInfoResult.FolderInfoBody.FolderInfoProps> data, string publicBaseUrl)
-        {
-            if (data == null)
-                return new ConcurrentDictionary<string, Folder>(StringComparer.InvariantCultureIgnoreCase);
-
-            return new ConcurrentDictionary<string, Folder>(
-                    data.Where(it => FolderKinds.Contains(it.Kind))
-                        .Select(item => item.ToFolder(publicBaseUrl))
-                        .Select(item => new KeyValuePair<string, Folder>(item.FullPath, item)),
-                    StringComparer.InvariantCultureIgnoreCase);
-        }
-
-        public static ConcurrentDictionary<string, File> ToFileDictionary(
-            this List<FolderInfoResult.FolderInfoBody.FolderInfoProps> data, string publicBaseUrl)
-        {
-            if (data == null)
-                return new ConcurrentDictionary<string, File>(StringComparer.InvariantCultureIgnoreCase);
-
-            return new ConcurrentDictionary<string, File>(
-                    data.Where(it => it.Kind == "file")
-                        .Select(item => item.ToFile(publicBaseUrl, ""))
-                        .ToGroupedFiles()
-                        .Select(item => new KeyValuePair<string, File>(item.FullPath, item)),
-                    StringComparer.InvariantCultureIgnoreCase);
         }
 
         /// <summary>
@@ -280,11 +271,11 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
         public static File ToFile(this FolderInfoResult data, string publicBaseUrl,
             string home = null, Link ulink = null, string fileName = null, string nameReplacement = null)
         {
-            if (ulink == null || ulink.IsLinkedToFileSystem)
-                if (string.IsNullOrEmpty(fileName))
-                {
-                    return new File(WebDavPath.Combine(data.Body.Home ?? "", data.Body.Name), data.Body.Size);
-                }
+            if ((ulink == null || ulink.IsLinkedToFileSystem) &&
+                string.IsNullOrEmpty(fileName))
+            {
+                return new File(WebDavPath.Combine(data.Body.Home ?? "", data.Body.Name), data.Body.Size);
+            }
 
             PatchEntryPath(data, home, ulink);
 
@@ -345,7 +336,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             {
                 // Unix timestamp is seconds past epoch
                 var dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-                dtDateTime = dtDateTime.AddSeconds(unixTimeStamp); //.ToLocalTime(); - doesn't need, clients usially convert to localtime by itself
+                dtDateTime = dtDateTime.AddSeconds(unixTimeStamp); //.ToLocalTime(); - doesn't need, clients usually convert to localtime by itself
                 return dtDateTime;
             }
             catch (Exception e)

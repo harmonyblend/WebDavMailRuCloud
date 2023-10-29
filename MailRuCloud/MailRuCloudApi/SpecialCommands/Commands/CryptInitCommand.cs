@@ -9,7 +9,8 @@ namespace YaR.Clouds.SpecialCommands.Commands
     /// </summary>
     public class CryptInitCommand : SpecialCommand
     {
-        public CryptInitCommand(Cloud cloud, string path, IList<string> parames) : base(cloud, path, parames)
+        public CryptInitCommand(Cloud cloud, string path, IList<string> parameters)
+            : base(cloud, path, parameters)
         {
         }
 
@@ -28,7 +29,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                 path = WebDavPath.Combine(Path, param);
 
             var entry = await Cloud.GetItemAsync(path);
-            if (null == entry || entry.IsFile)
+            if (entry is null || entry.IsFile)
                 return SpecialCommandResult.Fail;
 
             var res = await Cloud.CryptInit((Folder)entry);

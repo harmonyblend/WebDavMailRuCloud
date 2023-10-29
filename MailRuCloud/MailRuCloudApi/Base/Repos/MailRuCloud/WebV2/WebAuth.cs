@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Tasks;
 using YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests;
 using YaR.Clouds.Base.Requests;
@@ -13,18 +14,20 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(WebAuth));
 
+        private readonly SemaphoreSlim _connectionLimiter;
         public CookieContainer Cookies { get; }
 
         private readonly HttpCommonSettings _settings;
         private readonly IBasicCredentials _creds;
 
-        public WebAuth(HttpCommonSettings settings, IBasicCredentials creds, AuthCodeRequiredDelegate onAuthCodeRequired)
+        public WebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings, IBasicCredentials creds, AuthCodeRequiredDelegate onAuthCodeRequired)
         {
+            _connectionLimiter = connectionLimiter;
             _settings = settings;
             _creds = creds;
             Cookies = new CookieContainer();
 
-            var logged = MakeLogin(onAuthCodeRequired).Result;
+            var logged = MakeLogin(connectionLimiter, onAuthCodeRequired).Result;
             if (!logged)
                 throw new AuthenticationException($"Cannot log in {creds.Login}");
 
@@ -35,38 +38,40 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2
                     if (creds.IsAnonymous) 
                         return null;
 
-                    var token = Auth().Result;
+                    var token = Auth(connectionLimiter).Result;
                     return token;
                 },
                 _ => TimeSpan.FromSeconds(AuthTokenExpiresInSec));
 
-            _cachedDownloadToken = new Cached<string>(_ => new DownloadTokenRequest(_settings, this).MakeRequestAsync().Result.ToToken(),
-                _ => TimeSpan.FromSeconds(DownloadTokenExpiresSec));
+            _cachedDownloadToken =
+                new Cached<string>(_ => new DownloadTokenRequest(_settings, this)
+                                            .MakeRequestAsync(_connectionLimiter).Result.ToToken(),
+                                   _ => TimeSpan.FromSeconds(DownloadTokenExpiresSec));
 
         }
 
-        public async Task<bool> MakeLogin(AuthCodeRequiredDelegate onAuthCodeRequired)
+        public async Task<bool> MakeLogin(SemaphoreSlim connectionLimiter, AuthCodeRequiredDelegate onAuthCodeRequired)
         {
             var loginResult = await new LoginRequest(_settings, this)
-                .MakeRequestAsync();
+                .MakeRequestAsync(connectionLimiter);
 
             // 2FA
             if (!string.IsNullOrEmpty(loginResult.Csrf))
             {
                 string authCode = onAuthCodeRequired(_creds.Login, false);
                 await new SecondStepAuthRequest(_settings, loginResult.Csrf, authCode)
-                    .MakeRequestAsync();
+                    .MakeRequestAsync(connectionLimiter);
             }
 
             await new EnsureSdcCookieRequest(_settings, this)
-                .MakeRequestAsync();
+                .MakeRequestAsync(connectionLimiter);
 
             return true;
         }
 
-        public async Task<AuthTokenResult> Auth()
+        public async Task<AuthTokenResult> Auth(SemaphoreSlim connectionLimiter)
         {
-            var req = await new AuthTokenRequest(_settings, this).MakeRequestAsync();
+            var req = await new AuthTokenRequest(_settings, this).MakeRequestAsync(connectionLimiter);
             var res = req.ToAuthTokenResult();
             return res;
         }

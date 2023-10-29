@@ -6,7 +6,8 @@ namespace YaR.Clouds.SpecialCommands.Commands
 {
     public class DeleteCommand : SpecialCommand
     {
-        public DeleteCommand(Cloud cloud, string path, IList<string> parames): base(cloud, path, parames)
+        public DeleteCommand(Cloud cloud, string path, IList<string> parameters)
+            : base(cloud, path, parameters)
         {
         }
 
@@ -25,13 +26,11 @@ namespace YaR.Clouds.SpecialCommands.Commands
                 path = WebDavPath.Combine(Path, param);
 
             var entry = await Cloud.GetItemAsync(path);
-            if (null == entry)
+            if (entry is null)
                 return SpecialCommandResult.Fail;
 
             var res = await Cloud.Remove(entry);
             return new SpecialCommandResult(res);
         }
     }
-
-
 }

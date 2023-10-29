@@ -17,30 +17,32 @@ using File = YaR.Clouds.Base.File;
 
 namespace YaR.Clouds.WebDavStore.StoreBase
 {
-    [DebuggerDisplay("{DirectoryInfo.FullPath}")]
+    [DebuggerDisplay("{DebuggerDisplay,nq}")]
     public class LocalStoreCollection : ILocalStoreCollection
     {
         private static readonly ILogger Logger = LoggerFactory.Factory.CreateLogger(typeof(LocalStoreCollection));
         private readonly IHttpContext _context;
         private readonly LocalStore _store;
-        public Folder DirectoryInfo { get; }
-        public IEntry EntryInfo => DirectoryInfo;
-        public long Length => DirectoryInfo.Size;
+        public Folder FolderWithDescendants { get; }
+        public IEntry EntryInfo => FolderWithDescendants;
+        public long Length => FolderWithDescendants.Size;
         public bool IsReadable => false;
 
-        public LocalStoreCollection(IHttpContext context, Folder directoryInfo, bool isWritable, 
+        private string DebuggerDisplay => FolderWithDescendants.FullPath;
+
+        public LocalStoreCollection(IHttpContext context, Folder folderWithChildren, bool isWritable, 
             LocalStore store)
         {
             _context = context;
-            DirectoryInfo = directoryInfo ?? throw new ArgumentNullException(nameof(directoryInfo));
+            FolderWithDescendants = folderWithChildren ?? throw new ArgumentNullException(nameof(folderWithChildren));
             _store = store;
 
             IsWritable = isWritable;
         }
 
-        public string CalculateEtag()
+        public string CalculateETag()
         {
-            string h = DirectoryInfo.FullPath;
+            string h = FolderWithDescendants.FullPath;
             var hash = SHA256.Create().ComputeHash(GetBytes(h));
             return BitConverter.ToString(hash).Replace("-", string.Empty);
         }
@@ -55,9 +57,9 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         //public PropertyManager<LocalStoreCollection> DefaultPropertyManager { get; }
 
         public bool IsWritable { get; }
-        public string Name => DirectoryInfo.Name;
-        public string UniqueKey => DirectoryInfo.FullPath;
-        public string FullPath => DirectoryInfo.FullPath;
+        public string Name => FolderWithDescendants.Name;
+        public string UniqueKey => FolderWithDescendants.FullPath;
+        public string FullPath => FolderWithDescendants.FullPath;
 
         public IPropertyManager PropertyManager => _store.CollectionPropertyManager;
         public ILockingManager LockingManager => _store.LockingManager;
@@ -102,10 +104,10 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
         public Task<IEnumerable<IStoreItem>> GetItemsAsync(IHttpContext httpContext)
         {
-            var list = DirectoryInfo.Entries
-                .Select(entry => entry.IsFile
-                    ? (IStoreItem)new LocalStoreItem((File)entry, IsWritable, _store)
-                    : new LocalStoreCollection(httpContext, (Folder)entry, IsWritable, _store))
+            var list = FolderWithDescendants.Descendants
+                .Select(child => child.IsFile
+                    ? (IStoreItem)new LocalStoreItem((File)child, IsWritable, _store)
+                    : new LocalStoreCollection(httpContext, (Folder)child, IsWritable, _store))
                 .ToList();
 
             return Task.FromResult<IEnumerable<IStoreItem>>(list);
@@ -187,7 +189,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         public async Task<StoreItemResult> CopyAsync(IStoreCollection destinationCollection, string name, bool overwrite, IHttpContext httpContext)
         {
             var instance = CloudManager.Instance(httpContext.Session.Principal.Identity);
-            var res = await instance.Copy(DirectoryInfo, destinationCollection.GetFullPath());
+            var res = await instance.Copy(FolderWithDescendants, destinationCollection.GetFullPath());
 
             return new StoreItemResult( res ? DavStatusCode.Created : DavStatusCode.InternalServerError);
         }
@@ -275,7 +277,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
                 return DavStatusCode.PreconditionFailed;
 
             // Determine the full path
-            var fullPath = WebDavPath.Combine(DirectoryInfo.FullPath, name);
+            var fullPath = WebDavPath.Combine(FolderWithDescendants.FullPath, name);
             try
             {
                 var item = FindSubItem(name);
@@ -296,18 +298,18 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         }
 
         public InfiniteDepthMode InfiniteDepthMode => InfiniteDepthMode.Allowed;
-        public bool IsValid => !string.IsNullOrEmpty(DirectoryInfo?.FullPath);
+        public bool IsValid => !string.IsNullOrEmpty(FolderWithDescendants.FullPath);
 
 
         public override int GetHashCode()
         {
-            return DirectoryInfo.FullPath.GetHashCode();
+            return FolderWithDescendants.FullPath.GetHashCode();
         }
 
         public override bool Equals(object obj)
         {
             return obj is LocalStoreCollection storeCollection && 
-                   storeCollection.DirectoryInfo.FullPath.Equals(DirectoryInfo.FullPath, StringComparison.CurrentCultureIgnoreCase);
+                   storeCollection.FolderWithDescendants.FullPath.Equals(FolderWithDescendants.FullPath, StringComparison.CurrentCultureIgnoreCase);
         }
     }
 }

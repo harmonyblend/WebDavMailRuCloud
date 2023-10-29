@@ -1,4 +1,6 @@
-﻿using System;
+﻿// Ignore Spelling: Ua
+
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using CommandLine;
@@ -26,8 +28,11 @@ namespace YaR.Clouds.Console
         // ReSharper disable once UnusedMember.Global
         public string Password { get; set; }
 
-        [Option("maxthreads", Default = 5, HelpText = "Maximum concurrent connections to cloud")]
+        [Option("maxthreads", Default = 5, HelpText = "Maximum concurrent listening connections to the service")]
         public int MaxThreadCount { get; set; }
+
+        [Option("maxconnections", Default = 10, HelpText = "Maximum concurrent connections to cloud")]
+        public int MaxConnectionCount { get; set; }
 
         [Option("user-agent", HelpText = "\"browser\" user-agent")]
         public string UserAgent { get; set; }
@@ -50,7 +55,7 @@ namespace YaR.Clouds.Console
         [Option("protocol", Default = Protocol.WebM1Bin, HelpText = "Cloud protocol")]
         public Protocol Protocol { get; set; }
 
-        [Option("cache-listing", Default = 30, HelpText = "Duration of in-memory cache of folder's listing, sec")]
+        [Option("cache-listing", Default = 30, HelpText = "Folder cache expiration timeout, sec")]
         public int CacheListingSec { get; set; }
 
         [Option("cache-listing-depth", Default = 1, HelpText = "List query folder depth, always equals 1 when cache-listing>0")]

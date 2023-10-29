@@ -10,7 +10,8 @@ namespace YaR.Clouds.SpecialCommands.Commands
 {
     public class SharedFolderLinkCommand : SpecialCommand
     {
-        public SharedFolderLinkCommand(Cloud cloud, string path, IList<string> parames): base(cloud, path, parames)
+        public SharedFolderLinkCommand(Cloud cloud, string path, IList<string> parameters)
+            : base(cloud, path, parameters)
         {
         }
 
@@ -27,10 +28,10 @@ namespace YaR.Clouds.SpecialCommands.Commands
                 url = new Uri(Cloud.Repo.PublicBaseUrlDefault + m.Groups["url"].Value, UriKind.Absolute);
 
             //TODO: make method in MailRuCloud to get entry by url
-            //var item = await new ItemInfoRequest(Cloud.CloudApi, m.Groups["url"].Value, true).MakeRequestAsync();
+            //var item = await new ItemInfoRequest(Cloud.CloudApi, m.Groups["url"].Value, true).MakeRequestAsync(_connectionLimiter);
             var item = await Cloud.Account.RequestRepo.ItemInfo(RemotePath.Get(new Link(url)) );
             var entry = item.ToEntry(Cloud.Repo.PublicBaseUrlDefault);
-            if (null == entry)
+            if (entry is null)
                 return SpecialCommandResult.Fail;
 
             string name = Parames.Count > 1 && !string.IsNullOrWhiteSpace(Parames[1])

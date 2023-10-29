@@ -1,6 +1,10 @@
 # Remove the line below if you want to inherit .editorconfig settings from higher directories
 root = true
 
+[*]
+vsspell_section_id = b0252c83892c418e88e4674d7eb14041
+vsspell_ignored_words_b0252c83892c418e88e4674d7eb14041 = deduplicate|repo|repos|uninstall|Yad|maxthreads|maxconnections|Auth|Versioning|App|codec|Subentries|Utc|refact|nq|unshare
+
 # C# files
 [*.cs]
 

@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 using YaR.Clouds.Base;
+using YaR.Clouds.Common;
 
 namespace YaR.Clouds.Extensions
 {
@@ -64,18 +66,18 @@ namespace YaR.Clouds.Extensions
         //    }
         //}
 
-        public static void ReadAsByte(this WebResponse resp, CancellationToken token, Stream outputStream = null)
-        {
-            using Stream responseStream = resp.GetResponseStream();
-            var buffer = new byte[65536];
-            int bytesRead;
+        //public static void ReadAsByte(this WebResponse resp, CancellationToken token, Stream outputStream = null)
+        //{
+        //    using Stream responseStream = resp.GetResponseStream();
+        //    var buffer = new byte[65536];
+        //    int bytesRead;
 
-            while (responseStream != null && (bytesRead = responseStream.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                token.ThrowIfCancellationRequested();
-                outputStream?.Write(buffer, 0, bytesRead);
-            }
-        }
+        //    while (responseStream != null && (bytesRead = responseStream.Read(buffer, 0, buffer.Length)) > 0)
+        //    {
+        //        token.ThrowIfCancellationRequested();
+        //        outputStream?.Write(buffer, 0, bytesRead);
+        //    }
+        //}
 
         public static T ThrowIf<T>(this T data, Func<T, bool> func, Func<T, Exception> ex)
         {

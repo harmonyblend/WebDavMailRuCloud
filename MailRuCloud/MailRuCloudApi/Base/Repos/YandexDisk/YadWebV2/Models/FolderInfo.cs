@@ -114,7 +114,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
         public List<Size> Sizes { get; set; }
 
         [JsonProperty("mediatype", NullValueHandling = NullValueHandling.Ignore)]
-        public string Mediatype { get; set; }
+        public string MediaType { get; set; }
 
         [JsonProperty("etime", NullValueHandling = NullValueHandling.Ignore)]
         public long? Etime { get; set; }

@@ -9,16 +9,17 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin.Requests
 {
     class DownloadRequest
     {
-        public DownloadRequest(HttpCommonSettings settings, IAuth authent, File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls)
+        public DownloadRequest(HttpCommonSettings settings, IAuth authenticator,
+            File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls)
         {
-            Request = CreateRequest(settings, authent, file, instart, inend, downServerUrl, publicBaseUrls);
+            Request = CreateRequest(settings, authenticator, file, instart, inend, downServerUrl, publicBaseUrls);
         }
 
         public HttpWebRequest Request { get; }
 
         private static HttpWebRequest CreateRequest(HttpCommonSettings settings,
-            IAuth authent, File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls)
-            //(IAuth authent, IWebProxy proxy, string url, long instart, long inend,  string userAgent)
+            IAuth authenticator, File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls)
+            //(IAuth authenticator, IWebProxy proxy, string url, long instart, long inend,  string userAgent)
         {
             bool isLinked = !file.PublicLinks.IsEmpty;
 
@@ -39,7 +40,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin.Requests
             else
             {
                 url = $"{downServerUrl}{Uri.EscapeDataString(file.FullPath.TrimStart('/'))}";
-                url += $"?client_id={settings.ClientId}&token={authent.AccessToken}";
+                url += $"?client_id={settings.ClientId}&token={authenticator.AccessToken}";
             }
 
             var uri = new Uri(url);
@@ -52,7 +53,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin.Requests
 
             request.AddRange(instart, inend);
             request.Proxy = settings.Proxy;
-            //request.CookieContainer = authent.Cookies;
+            //request.CookieContainer = authenticator.Cookies;
             request.Method = "GET";
             //request.Accept = "*/*";
             //request.UserAgent = settings.UserAgent;

@@ -6,14 +6,14 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
 {
     class YadDownloadRequest
     {
-        public YadDownloadRequest(HttpCommonSettings settings, IAuth authent, string url, long instart, long inend)
+        public YadDownloadRequest(HttpCommonSettings settings, IAuth authenticator, string url, long instart, long inend)
         {
-            Request = CreateRequest(authent, settings.Proxy, url, instart, inend, settings.UserAgent);
+            Request = CreateRequest(authenticator, settings.Proxy, url, instart, inend, settings.UserAgent);
         }
 
         public HttpWebRequest Request { get; }
 
-        private static HttpWebRequest CreateRequest(IAuth authent, IWebProxy proxy, string url, long instart, long inend,  string userAgent)
+        private static HttpWebRequest CreateRequest(IAuth Authenticator, IWebProxy proxy, string url, long instart, long inend,  string userAgent)
         {
 #pragma warning disable SYSLIB0014 // Type or member is obsolete
             var request = (HttpWebRequest)WebRequest.Create(url);
@@ -26,7 +26,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
 
             request.AddRange(instart, inend);
             request.Proxy = proxy;
-            request.CookieContainer = authent.Cookies;
+            request.CookieContainer = Authenticator.Cookies;
             request.Method = "GET";
             request.ContentType = MediaTypeNames.Application.Octet;
             request.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3";

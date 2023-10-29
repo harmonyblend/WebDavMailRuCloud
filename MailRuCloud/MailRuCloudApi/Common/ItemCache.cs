@@ -4,6 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
+/*
+ * ВНИМАНИЕ! Файл выключен из компиляции!
+ */
+
 namespace YaR.Clouds.Common
 {
     public class ItemCache<TKey, TValue>

@@ -74,8 +74,20 @@ namespace YaR.Clouds.Base.Requests
 
         private const int MaxRetryCount = 10;
 
-        public virtual async Task<T> MakeRequestAsync()
+        public virtual async Task<T> MakeRequestAsync(SemaphoreSlim serverMaxConnectionLimiter)
         {
+            /*
+             * С одной стороны есть желание максимально ускорить работу за счет параллельных
+             * вычислений и обращений к серверу.
+             * А с другой стороны, сервер может начать ругаться на слишком большое количество
+             * одновременных обращений.
+             * Можно экспериментальным путем подобрать близкое к максимальному количеству
+             * число допустимых одновременных обращений, а затем указать данное число
+             * в параметре maxconnections. На основе этого параметра создается ограничивающий
+             * максимальное количество обращений к серверу семафор,
+             * который передается в параметре метода.
+             */
+
             /*
              * По всей видимости, при нескольких последовательных обращениях к серверу
              * инфраструктура .NET повторно использует подключение после его закрытие по Close.
@@ -92,168 +104,176 @@ namespace YaR.Clouds.Base.Requests
              * что мы тут и сделаем.
              */
 
-            Stopwatch totalWatch = Stopwatch.StartNew();
-            int retry = MaxRetryCount;
-            while (true)
+            await serverMaxConnectionLimiter.WaitAsync();
+            try
             {
-                retry--;
-                bool isRetryState = false;
-                Stopwatch watch = Stopwatch.StartNew();
-                HttpWebRequest httpRequest = null;
-
-                try
+                Stopwatch totalWatch = Stopwatch.StartNew();
+                int retry = MaxRetryCount;
+                while (true)
                 {
-                    httpRequest = CreateRequest();
+                    retry--;
+                    bool isRetryState = false;
+                    Stopwatch watch = Stopwatch.StartNew();
+                    HttpWebRequest httpRequest = null;
 
-                    var requestContent = CreateHttpContent();
-                    if (requestContent != null)
+                    try
                     {
-                        httpRequest.Method = "POST";
-                        using Stream requestStream = await httpRequest.GetRequestStreamAsync().ConfigureAwait(false);
+                        httpRequest = CreateRequest();
 
-                        /*
-                         * The debug add the following to a watch list:
-                         *      System.Text.Encoding.UTF8.GetString(requestContent)
-                         */
+                        var requestContent = CreateHttpContent();
+                        if (requestContent != null)
+                        {
+                            httpRequest.Method = "POST";
+                            using Stream requestStream = await httpRequest.GetRequestStreamAsync().ConfigureAwait(false);
+
+                            /*
+                             * The debug add the following to a watch list:
+                             *      System.Text.Encoding.UTF8.GetString(requestContent)
+                             */
 #if NET48
                         await requestStream.WriteAsync(requestContent, 0, requestContent.Length).ConfigureAwait(false);
 #else
-                        await requestStream.WriteAsync(requestContent).ConfigureAwait(false);
+                            await requestStream.WriteAsync(requestContent).ConfigureAwait(false);
 #endif
-                        await requestStream.FlushAsync().ConfigureAwait(false);
-                        requestStream.Close();
-                    }
+                            await requestStream.FlushAsync().ConfigureAwait(false);
+                            requestStream.Close();
+                        }
 
-                    /*
-                     * Здесь в методе GetResponseAsync() иногда происходит исключение
-                     * throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
-                     * Мы его отлавливаем и повторяем обращение к серверу.
-                     */
-                    using var response = (HttpWebResponse)await httpRequest.GetResponseAsync().ConfigureAwait(false);
+                        /*
+                         * Здесь в методе GetResponseAsync() иногда происходит исключение
+                         * throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
+                         * Мы его отлавливаем и повторяем обращение к серверу.
+                         */
+                        using var response = (HttpWebResponse)await httpRequest.GetResponseAsync().ConfigureAwait(false);
 
-                    if ((int)response.StatusCode >= 500)
-                    {
-                        throw new RequestException("Server fault")
+                        if ((int)response.StatusCode >= 500)
                         {
-                            StatusCode = response.StatusCode
-                        };
-                    }
+                            throw new RequestException("Server fault")
+                            {
+                                StatusCode = response.StatusCode
+                            };
+                        }
 
-                    RequestResponse<T> result;
-                    using (var responseStream = response.GetResponseStream())
-                    {
-                        result = DeserializeMessage(response.Headers, Transport(responseStream));
-                        responseStream.Close();
-                    }
-
-                    if (!result.Ok || response.StatusCode != HttpStatusCode.OK)
-                    {
-                        var exceptionMessage =
-                            $"Request failed (status code {(int)response.StatusCode}): {result.Description}";
-                        throw new RequestException(exceptionMessage)
+                        RequestResponse<T> result;
+                        using (var responseStream = response.GetResponseStream())
                         {
-                            StatusCode = response.StatusCode,
-                            ResponseBody = string.Empty,
-                            Description = result.Description,
-                            ErrorCode = result.ErrorCode
-                        };
-                    }
+                            result = DeserializeMessage(response.Headers, Transport(responseStream));
+                            responseStream.Close();
+                        }
 
-                    response.Close();
+                        if (!result.Ok || response.StatusCode != HttpStatusCode.OK)
+                        {
+                            var exceptionMessage =
+                                $"Request failed (status code {(int)response.StatusCode}): {result.Description}";
+                            throw new RequestException(exceptionMessage)
+                            {
+                                StatusCode = response.StatusCode,
+                                ResponseBody = string.Empty,
+                                Description = result.Description,
+                                ErrorCode = result.ErrorCode
+                            };
+                        }
 
-                    return result.Result;
-                }
-                catch (WebException iex2) when (iex2?.InnerException is System.Net.Http.HttpRequestException iex1 &&
-                                                iex1?.InnerException is IOException iex)
-                {
-                    /*
-                     * Здесь мы ловим ошибку
-                     * throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof),
-                     * которая здесь выглядит следующим образом:
-                     * System.AggregateException: One or more errors occurred. (An error occurred while sending the request.)
-                     *  ---> System.Net.WebException: An error occurred while sending the request.
-                     *  ---> System.Net.Http.HttpRequestException: An error occurred while sending the request.
-                     *  ---> System.IO.IOException: The response ended prematurely.
-                     *         at System.Net.Http.HttpConnection.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
-                     *  --- End of inner exception stack trace ---
-                     */
-                    if (retry <= 0)
+                        response.Close();
+
+                        return result.Result;
+                    }
+                    catch (WebException iex2) when (iex2?.InnerException is System.Net.Http.HttpRequestException iex1 &&
+                                                    iex1?.InnerException is IOException iex)
                     {
-                        string msg = "The response ended prematurely, retry count completed";
+                        /*
+                         * Здесь мы ловим ошибку
+                         * throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof),
+                         * которая здесь выглядит следующим образом:
+                         * System.AggregateException: One or more errors occurred. (An error occurred while sending the request.)
+                         *  ---> System.Net.WebException: An error occurred while sending the request.
+                         *  ---> System.Net.Http.HttpRequestException: An error occurred while sending the request.
+                         *  ---> System.IO.IOException: The response ended prematurely.
+                         *         at System.Net.Http.HttpConnection.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+                         *  --- End of inner exception stack trace ---
+                         */
+                        if (retry <= 0)
+                        {
+                            string msg = "The response ended prematurely, retry count completed";
 #if DEBUG
-                        Logger.Warn(msg);
+                            Logger.Warn(msg);
 #else
                         Logger.Debug(msg);
 #endif
-                        throw;
-                    }
-                    else
-                    {
-                        isRetryState = true;
-                        string msg = "The response ended prematurely, retrying...";
+                            throw;
+                        }
+                        else
+                        {
+                            isRetryState = true;
+                            string msg = "The response ended prematurely, retrying...";
 #if DEBUG
-                        Logger.Warn(msg);
+                            Logger.Warn(msg);
 #else
                         Logger.Debug(msg);
 #endif
+                        }
                     }
-                }
-                catch (WebException iex2) when (iex2?.InnerException is System.Net.Http.HttpRequestException iex1 &&
-                                                iex1?.InnerException is SocketException iex)
-                {
-                    /*
-                     * Здесь мы ловим ошибку
-                     * SocketException: Попытка установить соединение была безуспешной,
-                     * т.к. от другого компьютера за требуемое время не получен нужный отклик,
-                     * или было разорвано уже установленное соединение из-за неверного отклика
-                     * уже подключенного компьютера.
-                     * 
-                     * Возможно превышено максимальное количество подключений к серверу.
-                     * Просто повторяем запрос после небольшого ожидания.
-                     */
-                    if (retry <= 0)
+                    catch (WebException iex2) when (iex2?.InnerException is System.Net.Http.HttpRequestException iex1 &&
+                                                    iex1?.InnerException is SocketException iex)
                     {
-                        string msg = "Can not connect to server. Increase timeout in response-timeout-sec parameter.";
+                        /*
+                         * Здесь мы ловим ошибку
+                         * SocketException: Попытка установить соединение была безуспешной,
+                         * т.к. от другого компьютера за требуемое время не получен нужный отклик,
+                         * или было разорвано уже установленное соединение из-за неверного отклика
+                         * уже подключенного компьютера.
+                         * 
+                         * Возможно превышено максимальное количество подключений к серверу.
+                         * Просто повторяем запрос после небольшого ожидания.
+                         */
+                        if (retry <= 0)
+                        {
+                            string msg = "Can not connect to server. Increase timeout in response-timeout-sec parameter.";
 #if DEBUG
-                        Logger.Warn(msg);
+                            Logger.Warn(msg);
 #else
                         Logger.Debug(msg);
 #endif
-                        throw;
-                    }
-                    else
-                    {
-                        isRetryState = true;
-                        string msg = watch.ElapsedMilliseconds < 1000
-                            ? "Connection to server terminated immediately, retrying after couple of seconds..."
-                            : $"Connection lost after {watch.ElapsedMilliseconds/1000} seconds, retrying after couple of seconds...";
+                            throw;
+                        }
+                        else
+                        {
+                            isRetryState = true;
+                            string msg = watch.ElapsedMilliseconds < 1000
+                                ? "Connection to server terminated immediately, retrying after couple of seconds..."
+                                : $"Connection lost after {watch.ElapsedMilliseconds / 1000} seconds, retrying after couple of seconds...";
 #if DEBUG
-                        Logger.Warn(msg);
+                            Logger.Warn(msg);
 #else
                         Logger.Debug(msg);
 #endif
-                        Thread.Sleep(TimeSpan.FromSeconds(2));
+                            Thread.Sleep(TimeSpan.FromSeconds(2));
+                        }
                     }
-                }
-                // ReSharper disable once RedundantCatchClause
+                    // ReSharper disable once RedundantCatchClause
 #pragma warning disable 168
-                catch (Exception ex)
+                    catch (Exception ex)
 #pragma warning restore 168
-                {
-                    throw;
-                }
-                finally
-                {
-                    watch.Stop();
-                    string totalText = null;
-                    if (!isRetryState && retry < MaxRetryCount - 1)
                     {
-                        totalWatch.Stop();
-                        totalText = $"({totalWatch.Elapsed.Milliseconds} ms of {MaxRetryCount - retry} retry laps)";
+                        throw;
                     }
-                    Logger.Debug($"HTTP:{httpRequest.Method}:{httpRequest.RequestUri.AbsoluteUri} " +
-                        $"({watch.Elapsed.Milliseconds} ms){(isRetryState ? ", retrying" : totalText)}");
+                    finally
+                    {
+                        watch.Stop();
+                        string totalText = null;
+                        if (!isRetryState && retry < MaxRetryCount - 1)
+                        {
+                            totalWatch.Stop();
+                            totalText = $"({totalWatch.Elapsed.Milliseconds} ms of {MaxRetryCount - retry} retry laps)";
+                        }
+                        Logger.Debug($"HTTP:{httpRequest.Method}:{httpRequest.RequestUri.AbsoluteUri} " +
+                            $"({watch.Elapsed.Milliseconds} ms){(isRetryState ? ", retrying" : totalText)}");
+                    }
                 }
+            }
+            finally
+            {
+                serverMaxConnectionLimiter.Release();
             }
         }
 

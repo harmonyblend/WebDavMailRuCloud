@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.IO;
 using YaR.Clouds.Base;
 using YaR.Clouds.Links.Dto;
@@ -82,6 +83,7 @@ namespace YaR.Clouds.Links
             }
         }
 
+        public ImmutableList<IEntry> Descendants => ImmutableList<IEntry>.Empty;
 
         public FileAttributes Attributes => FileAttributes.Normal; //TODO: dunno what to do
 

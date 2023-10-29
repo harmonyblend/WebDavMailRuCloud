@@ -6,7 +6,8 @@ namespace YaR.Clouds.SpecialCommands.Commands
 {
     public class MoveCommand : SpecialCommand
     {
-        public MoveCommand(Cloud cloud, string path, IList<string> parames) : base(cloud, path, parames)
+        public MoveCommand(Cloud cloud, string path, IList<string> parameters)
+            : base(cloud, path, parameters)
         {
         }
 
@@ -17,11 +18,11 @@ namespace YaR.Clouds.SpecialCommands.Commands
             string source = WebDavPath.Clean(Parames.Count == 1 ? Path : Parames[0]);
             string target = WebDavPath.Clean(Parames.Count == 1 ? Parames[0] : Parames[1]);
 
-            var sourceEntry = await Cloud.GetItemAsync(source);
-            if (null == sourceEntry)
+            var entry = await Cloud.GetItemAsync(source);
+            if (entry is null)
                 return SpecialCommandResult.Fail;
 
-            var res = await Cloud.MoveAsync(sourceEntry, target);
+            var res = await Cloud.MoveAsync(entry, target);
             return new SpecialCommandResult(res);
         }
     }

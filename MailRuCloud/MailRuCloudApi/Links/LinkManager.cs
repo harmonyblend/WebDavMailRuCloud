@@ -25,7 +25,7 @@ namespace YaR.Clouds.Links
         private const string HistoryContainerName = "item.links.history.wdmrc";
         private readonly Cloud _cloud;
         private ItemList _itemList = new();
-        private readonly ItemCache<string, IEntry> _itemCache;
+        private readonly EntryCache _linkCache;
 
         private readonly SemaphoreSlim _locker;
 
@@ -34,7 +34,7 @@ namespace YaR.Clouds.Links
         {
             _locker = new SemaphoreSlim(1);
             _cloud = cloud;
-            _itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(60));
+            _linkCache = new EntryCache(TimeSpan.FromSeconds(60), null);
             //{
             //    Полагаемся на стандартно заданное время очистки
             //    CleanUpPeriod = TimeSpan.FromMinutes(5)
@@ -100,22 +100,25 @@ namespace YaR.Clouds.Links
                     try
                     {
                         string filepath = WebDavPath.Combine(WebDavPath.Root, LinkContainerName);
-                        var file = (File)_cloud.GetItem(filepath, Cloud.ItemType.File, false);
-
-                        // If the file is not empty.
-                        // An empty file in UTF-8 with BOM is exactly 3 bytes long.
-                        if (file is not null && file.Size > 3)
+                        //var file = (File)_cloud.GetItem(filepath, Cloud.ItemType.File, false);
+                        var entry = _cloud.GetItemAsync(filepath, Cloud.ItemType.File, false).Result;
+                        if (entry is not null && entry is File file)
                         {
-                            _itemList = _cloud.DownloadFileAsJson<ItemList>(file);
-                        }
+                            // If the file is not empty.
+                            // An empty file in UTF-8 with BOM is exactly 3 bytes long.
+                            if (file is not null && file.Size > 3)
+                            {
+                                _itemList = _cloud.DownloadFileAsJson<ItemList>(file);
+                            }
 
-                        _itemList ??= new ItemList();
+                            _itemList ??= new ItemList();
 
-                        foreach (var f in _itemList.Items)
-                        {
-                            f.MapTo = WebDavPath.Clean(f.MapTo);
-                            if (!f.Href.IsAbsoluteUri)
-                                f.Href = new Uri(_cloud.Repo.PublicBaseUrlDefault + f.Href);
+                            foreach (var f in _itemList.Items)
+                            {
+                                f.MapTo = WebDavPath.Clean(f.MapTo);
+                                if (!f.Href.IsAbsoluteUri)
+                                    f.Href = new Uri(_cloud.Repo.PublicBaseUrlDefault + f.Href);
+                            }
                         }
                     }
                     catch (Exception e)
@@ -166,7 +169,7 @@ namespace YaR.Clouds.Links
                 return false;
 
             _itemList.Items.Remove(z);
-            _itemCache.Invalidate(path, parent);
+            _linkCache.OnRemoveTreeAsync(path, null);
 
             if (doSave)
                 Save();
@@ -217,7 +220,7 @@ namespace YaR.Clouds.Links
             {
                 foreach (var link in removes)
                 {
-                    _itemCache.Invalidate(link.FullPath, link.MapPath);
+                    _linkCache.RemoveTree(link.FullPath);
                 }
 
                 string path = WebDavPath.Combine(WebDavPath.Root, HistoryContainerName);
@@ -264,7 +267,7 @@ namespace YaR.Clouds.Links
         /// <returns></returns>
         public async Task<Link> GetItemLink(string path, bool doResolveType = true)
         {
-            var cached = _itemCache.Get(path);
+            (var cached, var getState) = _linkCache.Get(path);
             if (cached is not null)
                 return (Link)cached;
 
@@ -294,7 +297,7 @@ namespace YaR.Clouds.Links
             if (doResolveType)
                 await ResolveLink(link);
 
-            _itemCache.Add(link.FullPath, link);
+            _linkCache.Add(link);
             return link;
         }
 
@@ -306,7 +309,7 @@ namespace YaR.Clouds.Links
                 //    ? link.Href.OriginalString.Remove(0, _cloud.Repo.PublicBaseUrlDefault.Length + 1)
                 //    : link.Href.OriginalString;
 
-                //var infores = await new ItemInfoRequest(_cloud.CloudApi, link.Href, true).MakeRequestAsync();
+                //var infores = await new ItemInfoRequest(_cloud.CloudApi, link.Href, true).MakeRequestAsync(_connectionLimiter);
                 var infores = await _cloud.Account.RequestRepo.ItemInfo(RemotePath.Get(link));
                 link.ItemType = infores.Body.Kind == "file"
                     ? Cloud.ItemType.File
@@ -356,15 +359,11 @@ namespace YaR.Clouds.Links
         {
             path = WebDavPath.Clean(path);
 
-            var folder = (Folder)await _cloud.GetItemAsync(path);
-            if (folder.Entries.Any(entry => entry.Name == name))
+            var entry = await _cloud.GetItemAsync(path);
+            if (entry is not null && entry.Descendants.Any(entry => entry.Name == name))
                 return false;
 
-            //url = GetRelaLink(url);
             path = WebDavPath.Clean(path);
-
-            if (folder.Entries.Any(entry => entry.Name == name))
-                return false;
             if (_itemList.Items.Any(it => WebDavPath.PathEquals(it.MapTo, path) && it.Name == name))
                 return false;
 
@@ -378,7 +377,7 @@ namespace YaR.Clouds.Links
                 CreationDate = creationDate
             });
 
-            _itemCache.Invalidate(path);
+            _linkCache.RemoveOne(path);
             return true;
         }
 
@@ -417,7 +416,8 @@ namespace YaR.Clouds.Links
             if (!changed)
                 return;
 
-            _itemCache.Invalidate(fullPath, newPath);
+            _linkCache.RemoveTree(fullPath);
+            _linkCache.RemoveOne(newPath);
             Save();
         }
 
@@ -432,7 +432,7 @@ namespace YaR.Clouds.Links
 
             ilink.Name = newName;
             Save();
-            _itemCache.Invalidate(link.MapPath);
+            _linkCache.RemoveOne(link.FullPath);
             return true;
         }
 
@@ -471,7 +471,9 @@ namespace YaR.Clouds.Links
                 string oldmap = rootlink.MapTo;
                 rootlink.MapTo = destinationPath;
                 Save();
-                _itemCache.Invalidate(link.FullPath, oldmap, destinationPath);
+                _linkCache.RemoveTree(oldmap);
+                _linkCache.RemoveOne(destinationPath);
+                _linkCache.RemoveOne(link.FullPath);
                 return true;
             }
 
@@ -490,8 +492,10 @@ namespace YaR.Clouds.Links
             if (!res)
                 return false;
 
-            if (doSave) Save();
-            _itemCache.Invalidate(destinationPath);
+            if (doSave)
+                Save();
+
+            _linkCache.RemoveOne(destinationPath);
 
             return true;
         }

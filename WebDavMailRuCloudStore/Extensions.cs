@@ -14,7 +14,7 @@ namespace YaR.Clouds.WebDavStore
             {
                 null => await Task.FromResult(false),
                 LocalStoreItem storeItem => await cloud.Remove(storeItem.FileInfo),
-                LocalStoreCollection storeCollection => await cloud.Remove(storeCollection.DirectoryInfo),
+                LocalStoreCollection storeCollection => await cloud.Remove(storeCollection.FolderWithDescendants),
                 _ => throw new ArgumentException(string.Empty, nameof(item))
             };
         }

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Mime;
+using System.Threading;
 using System.Threading.Tasks;
 using YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests;
 using YaR.Clouds.Base.Requests;
@@ -25,9 +26,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(WebM1RequestRepo));
         private readonly AuthCodeRequiredDelegate _onAuthCodeRequired;
 
-        protected ShardManager ShardManager => _shardManager ??= new ShardManager(this);
-        private ShardManager _shardManager;
+        private readonly SemaphoreSlim _connectionLimiter;
 
+        protected ShardManager ShardManager { get; private set; }
 
         protected IRequestRepo AnonymousRepo => throw new NotImplementedException();
 
@@ -37,15 +38,22 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
             UserAgent = "CloudDiskOWindows 17.12.0009 beta WzBbt1Ygbm"
         };
 
-        protected WebM1RequestRepo(IWebProxy proxy, IBasicCredentials creds, AuthCodeRequiredDelegate onAuthCodeRequired)
-            :base(creds)
+        protected WebM1RequestRepo(CloudSettings settings, IWebProxy proxy,
+            IBasicCredentials credentials, AuthCodeRequiredDelegate onAuthCodeRequired)
+            : base(credentials)
         {
+            _connectionLimiter = new SemaphoreSlim(settings.MaxConnectionCount);
+            ShardManager = new ShardManager(_connectionLimiter, this);
+            HttpSettings.Proxy = proxy;
+            HttpSettings.CloudSettings = settings;
             _onAuthCodeRequired = onAuthCodeRequired;
 
 			ServicePointManager.DefaultConnectionLimit = int.MaxValue;
 
-            HttpSettings.Proxy = proxy;
-            Authent = new OAuth(HttpSettings, creds, onAuthCodeRequired);
+            // required for Windows 7 breaking connection
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
+
+            Authenticator = new OAuth(_connectionLimiter, HttpSettings, credentials, onAuthCodeRequired);
 
             CachedSharedList = new Cached<Dictionary<string, IEnumerable<PublicLinkInfo>>>(_ =>
                 {
@@ -63,9 +71,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
 
         
 
-        public Stream GetDownloadStream(File afile, long? start = null, long? end = null)
+        public Stream GetDownloadStream(File file, long? start = null, long? end = null)
         {
-            var istream = GetDownloadStreamInternal(afile, start, end);
+            var istream = GetDownloadStreamInternal(file, start, end);
             return istream;
         }
 
@@ -89,7 +97,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                     string url =(isLinked
                             ? $"{downServer.Value.Url}{WebDavPath.EscapeDataString(file.PublicLinks.Values.FirstOrDefault()?.Uri.PathAndQuery)}"
                             : $"{downServer.Value.Url}{Uri.EscapeDataString(file.FullPath.TrimStart('/'))}") +
-                        $"?client_id={HttpSettings.ClientId}&token={Authent.AccessToken}";
+                        $"?client_id={HttpSettings.ClientId}&token={Authenticator.AccessToken}";
                     var uri = new Uri(url);
 
 #pragma warning disable SYSLIB0014 // Type or member is obsolete
@@ -98,7 +106,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
 
                     request.AddRange(instart, inend);
                     request.Proxy = HttpSettings.Proxy;
-                    request.CookieContainer = Authent.Cookies;
+                    request.CookieContainer = Authenticator.Cookies;
                     request.Method = "GET";
                     request.Accept = "*/*";
                     request.UserAgent = HttpSettings.UserAgent;
@@ -130,7 +138,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                     };
                 },
                 exception => 
-                    ((exception as WebException)?.Response as HttpWebResponse)?.StatusCode == HttpStatusCode.NotFound,
+                    exception is WebException { Response: HttpWebResponse { StatusCode: HttpStatusCode.NotFound } },
                 exception =>
                 {
                     pendingServers.Free(downServer);
@@ -149,11 +157,11 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
         //public HttpWebRequest UploadRequest(File file, UploadMultipartBoundary boundary)
         //{
         //    var shard = GetShardInfo(ShardType.Upload).Result;
-        //    var url = new Uri($"{shard.Url}?client_id={HttpSettings.ClientId}&token={Authent.AccessToken}");
+        //    var url = new Uri($"{shard.Url}?client_id={HttpSettings.ClientId}&token={Authenticator.AccessToken}");
 
         //    var request = (HttpWebRequest)WebRequest.Create(url);
         //    request.Proxy = HttpSettings.Proxy;
-        //    request.CookieContainer = Authent.Cookies;
+        //    request.CookieContainer = Authenticator.Cookies;
         //    request.Method = "PUT";
         //    request.ContentLength = file.OriginalSize;
         //    request.Accept = "*/*";
@@ -183,7 +191,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                 var banned = ShardManager.BannedShards.Value;
                 if (banned.All(bsh => bsh.Url != ishard.Url))
                 {
-                    if (refreshed) Authent.ExpireDownloadToken();
+                    if (refreshed) Authenticator.ExpireDownloadToken();
                     return ishard;
                 }
                 ShardManager.CachedShards.Expire();
@@ -199,26 +207,26 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
 
         public async Task<CloneItemResult> CloneItem(string fromUrl, string toPath)
         {
-            var req = await new CloneItemRequest(HttpSettings, Authent, fromUrl, toPath).MakeRequestAsync();
+            var req = await new CloneItemRequest(HttpSettings, Authenticator, fromUrl, toPath).MakeRequestAsync(_connectionLimiter);
             var res = req.ToCloneItemResult();
             return res;
         }
 
         public async Task<CopyResult> Copy(string sourceFullPath, string destinationPath, ConflictResolver? conflictResolver = null)
         {
-            var req = await new CopyRequest(HttpSettings, Authent, sourceFullPath, destinationPath, conflictResolver).MakeRequestAsync();
+            var req = await new CopyRequest(HttpSettings, Authenticator, sourceFullPath, destinationPath, conflictResolver).MakeRequestAsync(_connectionLimiter);
             var res = req.ToCopyResult();
             return res;
         }
 
         public async Task<CopyResult> Move(string sourceFullPath, string destinationPath, ConflictResolver? conflictResolver = null)
         {
-            //var req = await new MoveRequest(HttpSettings, Authent, sourceFullPath, destinationPath).MakeRequestAsync();
+            //var req = await new MoveRequest(HttpSettings, Authenticator, sourceFullPath, destinationPath).MakeRequestAsync(_connectionLimiter);
             //var res = req.ToCopyResult();
             //return res;
 
-            var req = await new MoveRequest(HttpSettings, Authent, ShardManager.MetaServer.Url, sourceFullPath, destinationPath)
-                .MakeRequestAsync();
+            var req = await new MoveRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, sourceFullPath, destinationPath)
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = req.ToCopyResult(WebDavPath.Name(destinationPath));
             return res;
@@ -236,10 +244,10 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
             FolderInfoResult datares;
             try
             {
-                datares = await new FolderInfoRequest(HttpSettings, Authent, path, offset, limit)
-                    .MakeRequestAsync();
+                datares = await new FolderInfoRequest(HttpSettings, Authenticator, path, offset, limit)
+                    .MakeRequestAsync(_connectionLimiter);
             }
-            catch (WebException e) when ((e.Response as HttpWebResponse)?.StatusCode == HttpStatusCode.NotFound)
+            catch (WebException e) when (e.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound })
             {
                 return null;
             }
@@ -263,27 +271,27 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                     ulink: path.Link,
                     fileName: path.Link == null ? WebDavPath.Name(path.Path) : path.Link.OriginalName,
                     nameReplacement: path.Link?.IsLinkedToFileSystem ?? true ? WebDavPath.Name(path.Path) : null )
-                : datares.ToFolder(PublicBaseUrlDefault, path.Path, path.Link);
+                : (IEntry)datares.ToFolder(PublicBaseUrlDefault, path.Path, path.Link);
 
             return entry;
         }
 
         public async Task<FolderInfoResult> ItemInfo(RemotePath path, int offset = 0, int limit = int.MaxValue)
         {
-            var req = await new ItemInfoRequest(HttpSettings, Authent, path, offset, limit).MakeRequestAsync();
+            var req = await new ItemInfoRequest(HttpSettings, Authenticator, path, offset, limit).MakeRequestAsync(_connectionLimiter);
             return req;
         }
 
         public async Task<AccountInfoResult> AccountInfo()
         {
-            var req = await new AccountInfoRequest(HttpSettings, Authent).MakeRequestAsync();
+            var req = await new AccountInfoRequest(HttpSettings, Authenticator).MakeRequestAsync(_connectionLimiter);
             var res = req.ToAccountInfo();
             return res;
         }
 
         public async Task<PublishResult> Publish(string fullPath)
         {
-            var req = await new PublishRequest(HttpSettings, Authent, fullPath).MakeRequestAsync();
+            var req = await new PublishRequest(HttpSettings, Authenticator, fullPath).MakeRequestAsync(_connectionLimiter);
             var res = req.ToPublishResult();
 
             if (res.IsSuccess)
@@ -302,27 +310,27 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                 CachedSharedList.Value.Remove(item.Key);
             }
 
-            var req = await new UnpublishRequest(this, HttpSettings, Authent, publicLink.OriginalString).MakeRequestAsync();
+            var req = await new UnpublishRequest(this, HttpSettings, Authenticator, publicLink.OriginalString).MakeRequestAsync(_connectionLimiter);
             var res = req.ToUnpublishResult();
             return res;
         }
 
         public async Task<RemoveResult> Remove(string fullPath)
         {
-            var req = await new RemoveRequest(HttpSettings, Authent, fullPath).MakeRequestAsync();
+            var req = await new RemoveRequest(HttpSettings, Authenticator, fullPath).MakeRequestAsync(_connectionLimiter);
             var res = req.ToRemoveResult();
             return res;
         }
 
         public async Task<RenameResult> Rename(string fullPath, string newName)
         {
-            //var req = await new RenameRequest(HttpSettings, Authent, fullPath, newName).MakeRequestAsync();
+            //var req = await new RenameRequest(HttpSettings, Authenticator, fullPath, newName).MakeRequestAsync(_connectionLimiter);
             //var res = req.ToRenameResult();
             //return res;
 
             string newFullPath = WebDavPath.Combine(WebDavPath.Parent(fullPath), newName);
-            var req = await new MoveRequest(HttpSettings, Authent, ShardManager.MetaServer.Url, fullPath, newFullPath)
-                .MakeRequestAsync();
+            var req = await new MoveRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, fullPath, newFullPath)
+                .MakeRequestAsync(_connectionLimiter);
 
             var res = req.ToRenameResult();
             return res;
@@ -330,9 +338,10 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
 
         public Dictionary<ShardType, ShardInfo> GetShardInfo1()
         {
-            return Authent.IsAnonymous 
-                ? new Clouds.Base.Repos.MailRuCloud.WebV2.Requests.ShardInfoRequest(HttpSettings, Authent).MakeRequestAsync().Result.ToShardInfo() 
-                : new ShardInfoRequest(HttpSettings, Authent).MakeRequestAsync().Result.ToShardInfo();
+            return Authenticator.IsAnonymous 
+                ? new WebV2.Requests
+                     .ShardInfoRequest(HttpSettings, Authenticator).MakeRequestAsync(_connectionLimiter).Result.ToShardInfo() 
+                : new ShardInfoRequest(HttpSettings, Authenticator).MakeRequestAsync(_connectionLimiter).Result.ToShardInfo();
         }
 
 
@@ -340,8 +349,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
 
         private async Task<FolderInfoResult> GetShareListInner()
         {
-            var res = await new SharedListRequest(HttpSettings, Authent)
-                .MakeRequestAsync();
+            var res = await new SharedListRequest(HttpSettings, Authenticator)
+                .MakeRequestAsync(_connectionLimiter);
 
             return res;
         }
@@ -362,17 +371,21 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
 
         public async Task<CreateFolderResult> CreateFolder(string path)
         {
-            //return (await new CreateFolderRequest(HttpSettings, Authent, path).MakeRequestAsync())
+            //return (await new CreateFolderRequest(HttpSettings, Authenticator, path).MakeRequestAsync())
             //    .ToCreateFolderResult();
 
-            return (await new CreateFolderRequest(HttpSettings, Authent, ShardManager.MetaServer.Url, path).MakeRequestAsync())
-                .ToCreateFolderResult();
+            var folderReqest = await new CreateFolderRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, path)
+                .MakeRequestAsync(_connectionLimiter);
+
+            return folderReqest.ToCreateFolderResult();
         }
 
         public Task<AddFileResult> AddFile(string fileFullPath, IFileHash fileHash, FileSize fileSize, DateTime dateTime, ConflictResolver? conflictResolver)
         {
             throw new NotImplementedException();
         }
+
+        public async Task<CheckUpInfo> ActiveOperationsAsync() => await Task.FromResult<CheckUpInfo>(null);
     }
 }
 

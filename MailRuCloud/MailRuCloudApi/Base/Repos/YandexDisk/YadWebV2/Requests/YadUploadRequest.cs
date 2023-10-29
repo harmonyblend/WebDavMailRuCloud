@@ -6,20 +6,20 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Requests
 {
     class YadUploadRequest
     {
-        public YadUploadRequest(HttpCommonSettings settings, YadWebAuth authent, string url, long size)
+        public YadUploadRequest(HttpCommonSettings settings, YadWebAuth authenticator, string url, long size)
         {
-            Request = CreateRequest(url, authent, settings.Proxy, size, settings.UserAgent);
+            Request = CreateRequest(url, authenticator, settings.Proxy, size, settings.UserAgent);
         }
 
         public HttpWebRequest Request { get; }
 
-        private HttpWebRequest CreateRequest(string url, YadWebAuth authent, IWebProxy proxy, long size, string userAgent)
+        private HttpWebRequest CreateRequest(string url, YadWebAuth authenticator, IWebProxy proxy, long size, string userAgent)
         {
 #pragma warning disable SYSLIB0014 // Type or member is obsolete
             var request = (HttpWebRequest)WebRequest.Create(url);
 #pragma warning restore SYSLIB0014 // Type or member is obsolete
             request.Proxy = proxy;
-            request.CookieContainer = authent.Cookies;
+            request.CookieContainer = authenticator.Cookies;
             request.Method = "PUT";
             request.ContentLength = size;
             request.Referer = "https://disk.yandex.ru/client/disk";

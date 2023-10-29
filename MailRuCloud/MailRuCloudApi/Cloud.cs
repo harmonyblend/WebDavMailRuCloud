@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -27,7 +28,7 @@ namespace YaR.Clouds
     /// </summary>
     public class Cloud : IDisposable
     {
-        //private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(Account));
+        private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(Cloud));
 
         public LinkManager LinkManager { get; }
 
@@ -45,10 +46,15 @@ namespace YaR.Clouds
         public Account Account { get; }
 
 
+        ///// <summary>
+        ///// Caching files for multiple small reads
+        ///// </summary>
+        //private readonly ItemCache<string, IEntry> _itemCache;
+
         /// <summary>
-        /// Caching files for multiple small reads
+        /// Кеш облачной файловой системы.
         /// </summary>
-        private readonly ItemCache<string, IEntry> _itemCache;
+        private readonly EntryCache _entryCache;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Cloud" /> class.
@@ -62,12 +68,14 @@ namespace YaR.Clouds
                 throw new AuthenticationException("Auth token hasn't been retrieved.");
             }
 
-            //TODO: wow very dummy linking, refact cache realization globally!
-            _itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(settings.CacheListingSec));
-            //{
-            //    Полагаемся на стандартно заданное время очистки
-            //    CleanUpPeriod = TimeSpan.FromMinutes(5)
-            //};
+            _entryCache = new EntryCache(TimeSpan.FromSeconds(settings.CacheListingSec), Account.RequestRepo.ActiveOperationsAsync);
+
+            ////TODO: wow very dummy linking, refact cache realization globally!
+            //_itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(settings.CacheListingSec));
+            ////{
+            ////    Полагаемся на стандартно заданное время очистки
+            ////    CleanUpPeriod = TimeSpan.FromMinutes(5)
+            ////};
             LinkManager = settings.DisableLinkManager ? null : new LinkManager(this);
         }
 
@@ -85,49 +93,131 @@ namespace YaR.Clouds
             return entry;
         }
 
-        ///// <summary>
-        ///// Get list of files and folders from account.
-        ///// </summary>
-        ///// <param name="path">Path in the cloud to return the list of the items.</param>
-        ///// <param  name="itemType">Unknown, File/Folder if you know for sure</param>
-        ///// <param name="resolveLinks">True if you know for sure that's not a linked item</param>
-        ///// <returns>List of the items.</returns>
-        public virtual async Task<IEntry> GetItemAsync(string path, ItemType itemType = ItemType.Unknown, bool resolveLinks = true)
+
+        private readonly ConcurrentDictionary<string /* full path */, Task<IEntry>> _getItemDict =
+            new(StringComparer.InvariantCultureIgnoreCase);
+
+        private readonly SemaphoreSlim _getItemDictLocker = new SemaphoreSlim(1);
+
+        /// <summary>
+        /// Get list of files and folders from account.
+        /// </summary>
+        /// <param name="path">Path in the cloud to return the list of the items.</param>
+        /// <param name="itemType">Unknown, File/Folder if you know for sure</param>
+        /// <param name="resolveLinks">True if you know for sure that's not a linked item</param>
+        /// <param name="fastGetFromCloud">True to skip link manager, cache and so on, just get
+        /// the entry info from cloud as fast as possible.</param>
+        /// <returns>List of the items.</returns>
+        public virtual Task<IEntry> GetItemAsync(string path, ItemType itemType = ItemType.Unknown,
+            bool resolveLinks = true, bool fastGetFromCloud = false)
         {
-            if (Settings.Protocol == Protocol.WebM1Bin || Settings.Protocol == Protocol.WebV2)
+            /*
+             * Параметр ItemType сохранен для совместимости со старыми вызовами,
+             * чтобы не потерять и сохранить информацию когда что надо получить,
+             * на случай, если понадобится, но сейчас по факту параметр не используется.
+             */
+
+            /*
+             * Клиенты очень часто читают одну и ту же директорию через короткий промежуток времени.
+             * Часто получается так, что первый запрос чтения папки с сервера еще не завершен,
+             * а тут уже второй пришел, а поскольку кеш еще не образован результатом первого обращения,
+             * то уже оба идут к серверу, не взирая на то, что выбирается одна и та же папка.
+             * Поэтому, составляем словарь, где ключ - FullPath, а значение - Task.
+             * Первый, кто лезет за содержимым папки, формирует Task, кладет его в словарь,
+             * по окончании очищает словарь от записи.
+             * Последующие, обнаружив запись в словаре, используют сохраненный Task,
+             * точнее его Result. До формирования значения в Result последующие обращения блокируются
+             * и ждут завершения, затем получают готовое значение и уходят довольные.
+             * Это снижает нагрузку на канал до сервера, нагрузку на сервер и позволяет для
+             * последующих обращений получать результат раньше, т.к. результат первого обращения
+             * точно будет получен раньше, т.к. раньше начался.
+             */
+
+            if (_getItemDict.TryGetValue(path, out var oldTask))
+                return oldTask;
+
+            _getItemDictLocker.Wait();
+            try
+            {
+                if (_getItemDict.TryGetValue(path, out oldTask))
+                    return oldTask;
+
+                _getItemDict[path] = Task.Run(() => GetItemInternalAsync(path, resolveLinks, fastGetFromCloud).Result);
+            }
+            finally
+            {
+                _getItemDictLocker.Release();
+            }
+
+            try
+            {
+                return Task.FromResult(_getItemDict[path].Result);
+            }
+            finally
+            {
+                _getItemDict.TryRemove(path, out _);
+            }
+        }
+
+        private static readonly Regex _mailRegex =
+            new Regex(@"\A/(?<uri>https://cloud\.mail\.\w+/public/\S+/\S+(/.*)?)\Z",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        /// <summary>
+        /// Данный метод запускается для каждого path только в одном потоке.
+        /// Все остальные потоки ожидают результата от единственного выполняемого.
+        /// См. комментарий в методе GetItemAsync.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="resolveLinks"></param>
+        /// <returns></returns>
+        private async Task<IEntry> GetItemInternalAsync(string path, bool resolveLinks, bool fastGetFromCloud = false)
+        {
+            if (!fastGetFromCloud &&
+                (Settings.Protocol == Protocol.WebM1Bin || Settings.Protocol == Protocol.WebV2))
             {
                 //TODO: вообще, всё плохо стало, всё запуталось, всё надо переписать
-                var uriMatch = Regex.Match(path, @"\A/(?<uri>https://cloud\.mail\.\w+/public/\S+/\S+(/.*)?)\Z");
+                var uriMatch = _mailRegex.Match(path);
                 if (uriMatch.Success)
-                    return await GetPublicItemAsync(new Uri(uriMatch.Groups["uri"].Value, UriKind.Absolute), itemType);
+                    return await GetPublicItemAsync(new Uri(uriMatch.Groups["uri"].Value, UriKind.Absolute));
             }
 
             if (Account.IsAnonymous)
                 return null;
 
             path = WebDavPath.Clean(path);
+            RemotePath remotePath;
 
-            if (Settings.CacheListingSec > 0)
+            if (fastGetFromCloud)
             {
-                var cached = CacheGetEntry(path);
-                if (cached is not null)
-                    return cached;
+                remotePath = RemotePath.Get(path);
+                return await Account.RequestRepo.FolderInfo(remotePath, depth: 1, limit: 2);
             }
+
+            (var cached, var getState) = _entryCache.Get(path);
+            if (getState == EntryCache.GetState.Entry)
+                return cached;
+            if (getState == EntryCache.GetState.NotExists)
+                return null;
 
             //TODO: subject to refact!!!
             Link ulink = resolveLinks && LinkManager is not null ? await LinkManager.GetItemLink(path) : null;
 
-            // bad link detected, just return stub
-            // cause client cannot, for example, delete it if we return NotFound for this item
+            /*
+             * Если LinkManager на затребованный path выдал ссылку, а ссылка бракованная и не рабочая,
+             * то нельзя выдать null, показывающий отсутствие файла/папки, иначе удалить такую
+             * бракованную ссылку будет невозможно.
+             * Потому формируем специальную заглушку с признаком Bad.
+             */
             if (ulink is { IsBad: true })
             {
                 var res = ulink.ToBadEntry();
-                _itemCache.Add(res.FullPath, res);
+                _entryCache.Add(res);
                 return res;
             }
 
-            if (itemType == ItemType.Unknown && ulink is not null)
-                itemType = ulink.ItemType;
+            //if (itemType == ItemType.Unknown && ulink is not null)
+            //    itemType = ulink.ItemType;
 
             // TODO: cache (parent) folder for file 
             //if (itemType == ItemType.File)
@@ -136,122 +226,234 @@ namespace YaR.Clouds
             //    _itemCache.Add(cachefolder.FullPath, cachefolder);
             //    //_itemCache.Add(cachefolder.Files);
             //}
+            remotePath = ulink is null ? RemotePath.Get(path) : RemotePath.Get(ulink);
+            var cloudResult = await Account.RequestRepo.FolderInfo(remotePath, depth: Settings.ListDepth);
+            if (cloudResult is null)
+            {
+                // Если обратились к серверу, а в ответ пустота,
+                // надо прочистить кеш, на случай, если в кеше что-то есть,
+                // а в облаке параллельно удалили папку.
+                // Если с сервера получено состояние, что папки нет,
+                // а кеш ранее говорил, что папка в кеше есть, но без наполнения,
+                // то папку удалили и надо безотлагательно очистить кеш.
+                if (getState == EntryCache.GetState.EntryWithUnknownContent)
+                {
+                    Logger.Debug("Папка была удалена, делается чистка кеша");
+                }
+                _entryCache.OnRemoveTreeAsync(remotePath.Path, null);
 
-            var rp = ulink is null ? RemotePath.Get(path) : RemotePath.Get(ulink);
-            var entry = await Account.RequestRepo.FolderInfo(rp, depth:Settings.ListDepth);
-            if (entry is null)
                 return null;
+            }
 
-            if (itemType == ItemType.Unknown)
-                itemType = entry is Folder 
-                    ? ItemType.Folder 
-                    : ItemType.File;
 
-            if (itemType == ItemType.Folder && entry is Folder folder) // fill folder with links if any
-                FillWithULinks(folder);
+            //if (itemType == ItemType.Unknown)
+            //    itemType = cloudResult is Folder 
+            //        ? ItemType.Folder 
+            //        : ItemType.File;
 
-            if (Settings.CacheListingSec > 0)
-                CacheAddEntry(entry);
+            //if (itemType == ItemType.Folder && cloudResult is Folder folder) // fill folder with links if any
+            //    FillWithULinks(folder);
 
-            return entry;
+            if (LinkManager is not null && cloudResult is Folder f)
+            {
+                FillWithULinks(f);
+            }
+
+            //if (Settings.CacheListingSec > 0)
+            //    CacheAddEntry(cloudResult);
+
+            _entryCache.Add(cloudResult);
+
+
+            /*
+             * Если запрошен файл или папка, которого нет в кеше,
+             * при этом не известно, есть ли он на сервере,
+             * есть вероятность, что скоро будет запрошен соседний файл или папка
+             * и той же родительской папки, поэтому имеет смысл сделать упреждающее
+             * чтение содержимого родительской папки с сервера или убедиться,
+             * что она есть в кеше.
+             */
+            string parentPath = WebDavPath.Parent(path);
+            if (parentPath != path && _entryCache.IsCacheEnabled)
+            {
+                // Здесь не ожидается результата работы, задача отработает в фоне и заполнит кеш.
+                // Обращение к серверу делается после чтения с сервера результата текущего обращения,
+                // то есть сначала затребованный результат, а потом фоновый, не наоборот, чтобы не ждать.
+                _ = GetItemAsync(parentPath).ConfigureAwait(false);
+            }
+
+            return cloudResult;
         }
 
         private void FillWithULinks(Folder folder)
         {
-            if (!folder.IsChildrenLoaded) return;
+            if (folder == null || !folder.IsChildrenLoaded)
+                return;
 
-            if (LinkManager is not null)
+            string fullPath = folder.FullPath;
+
+            var flinks = LinkManager.GetItems(fullPath);
+            if (flinks is not null)
             {
-                var flinks = LinkManager.GetItems(folder.FullPath);
-                if (flinks is not null && flinks.Any())
+                var newChildren = new List<IEntry>();
+                foreach (var flink in flinks)
                 {
-                    foreach (var flink in flinks)
+                    string linkpath = WebDavPath.Combine(fullPath, flink.Name);
+
+                    if (flink.IsFile)
                     {
-                        string linkpath = WebDavPath.Combine(folder.FullPath, flink.Name);
+                        if (folder.Descendants.Any(entry => entry.FullPath.Equals(linkpath, StringComparison.InvariantCultureIgnoreCase)))
+                            continue;
 
-                        if (!flink.IsFile)
-                        {
-                            Folder item = new Folder(0, linkpath) { CreationTimeUtc = flink.CreationDate ?? DateTime.MinValue };
-                            folder.Folders.AddOrUpdate(item.FullPath, item, (_, _) => item);
-                        }
-                        else
-                        {
-                            if (folder.Files.ContainsKey(linkpath))
-                                continue;
-
-                            var newFile = new File(linkpath, flink.Size, new PublicLinkInfo(flink.Href));
-                            if (flink.CreationDate is not null)
-                                newFile.LastWriteTimeUtc = flink.CreationDate.Value;
-                            folder.Files.AddOrUpdate(newFile.FullPath, newFile, (_, _) => newFile);
-                        }
+                        var newFile = new File(linkpath, flink.Size, new PublicLinkInfo(flink.Href));
+                        if (flink.CreationDate is not null)
+                            newFile.LastWriteTimeUtc = flink.CreationDate.Value;
+                        newChildren.Add(newFile);
+                    }
+                    else
+                    {
+                        Folder newFolder = new Folder(0, linkpath) { CreationTimeUtc = flink.CreationDate ?? DateTime.MinValue };
+                        newChildren.Add(newFolder);
                     }
                 }
-            }
-
-            foreach (var childFolder in folder.Folders.Values)
-                FillWithULinks(childFolder);
-        }
-
-
-        private void CacheAddEntry(IEntry entry)
-        {
-            switch (entry)
-            {
-                case File cfile:
-                    _itemCache.Add(cfile.FullPath, cfile);
-                    break;
-                case Folder { IsChildrenLoaded: true } cfolder:
+                if (newChildren.Count > 0)
                 {
-                    _itemCache.Add(cfolder.FullPath, cfolder);
-                    _itemCache.Add(cfolder.Files.Select(f => new KeyValuePair<string, IEntry>(f.Value.FullPath, f.Value)));
-
-                    foreach (var childFolder in cfolder.Entries)
-                        CacheAddEntry(childFolder);
-                    break;
+                    folder.Descendants = folder.Descendants.AddRange(newChildren);
                 }
             }
+
+            foreach (var child in folder.Descendants)
+            {
+                if (child is Folder f)
+                    FillWithULinks(f);
+            }
         }
 
-        private IEntry CacheGetEntry(string path) => _itemCache.Get(path);
+        //private void FillWithULinks(Folder folder)
+        //{
+        //    if (!folder.IsChildrenLoaded) return;
 
-        public virtual IEntry GetItem(string path, ItemType itemType = ItemType.Unknown, bool resolveLinks = true)
-            => GetItemAsync(path, itemType, resolveLinks).Result;
+        //    if (LinkManager is not null)
+        //    {
+        //        var flinks = LinkManager.GetItems(folder.FullPath);
+        //        if (flinks is not null && flinks.Any())
+        //        {
+        //            foreach (var flink in flinks)
+        //            {
+        //                string linkpath = WebDavPath.Combine(folder.FullPath, flink.Name);
 
-        public bool IsFileExists(string filename, List<string> folderPaths)
+        //                if (!flink.IsFile)
+        //                {
+        //                    Folder item = new Folder(0, linkpath) { CreationTimeUtc = flink.CreationDate ?? DateTime.MinValue };
+        //                    folder.Folders.AddOrUpdate(item.FullPath, item, (_, _) => item);
+        //                }
+        //                else
+        //                {
+        //                    if (folder.Files.ContainsKey(linkpath))
+        //                        continue;
+
+        //                    var newFile = new File(linkpath, flink.Size, new PublicLinkInfo(flink.Href));
+        //                    if (flink.CreationDate is not null)
+        //                        newFile.LastWriteTimeUtc = flink.CreationDate.Value;
+        //                    folder.Files.AddOrUpdate(newFile.FullPath, newFile, (_, _) => newFile);
+        //                }
+        //            }
+        //        }
+        //    }
+
+        //    foreach (var childFolder in folder.Folders.Values)
+        //        FillWithULinks(childFolder);
+        //}
+
+
+        //private void CacheAddEntry(IEntry entry)
+        //{
+        //    switch (entry)
+        //    {
+        //        case File cfile:
+        //            _itemCache.Add(cfile.FullPath, cfile);
+        //            break;
+        //        case Folder { IsChildrenLoaded: true } cfolder:
+        //        {
+        //            _itemCache.Add(cfolder.FullPath, cfolder);
+        //            _itemCache.Add(cfolder.Files.Select(f => new KeyValuePair<string, IEntry>(f.Value.FullPath, f.Value)));
+
+        //            foreach (var childFolder in cfolder.Entries)
+        //                CacheAddEntry(childFolder);
+        //            break;
+        //        }
+        //    }
+        //}
+
+        //private IEntry CacheGetEntry(string path) => _itemCache.Get(path);
+
+        //public virtual IEntry GetItem(string path, ItemType itemType = ItemType.Unknown, bool resolveLinks = true)
+        //    => GetItemAsync(path, itemType, resolveLinks).Result;
+
+        /// <summary>
+        /// Поиск файла/папки по названию (без пути) в перечисленных папках.
+        /// Возвращает полный путь к файлу или папке.
+        /// </summary>
+        /// <param name="nameWithoutPathToFind">Название файла/папки без пути.</param>
+        /// <param name="folderPaths">Список полных папок с полными путями.</param>
+        /// <returns></returns>
+        public string Find(string nameWithoutPathToFind, params string[] folderPaths)
         {
-            if (folderPaths is null)
-                return false;
+            if (folderPaths is null || folderPaths.Length == 0 || string.IsNullOrEmpty(nameWithoutPathToFind))
+                return null;
 
-            var folders = folderPaths
-                .AsParallel()
-                .WithDegreeOfParallelism(Math.Min(MaxInnerParallelRequests, folderPaths.Count))
-                .Select(async path => (Folder)await GetItemAsync(path, ItemType.Folder, false));
-
-            if (folders is null)
-                return false;
-
-            foreach (var item in folders)
+            List<string> paths = new List<string>();
+            // Сначала смотрим в кеше, без обращений к серверу
+            foreach (var folderPath in folderPaths)
             {
-                if (item.Result is null)
+                var path = WebDavPath.Combine(folderPath, nameWithoutPathToFind);
+                (var cached, var getState) = _entryCache.Get(path);
+                // Если файл или папка найдены в кеше
+                if (getState == EntryCache.GetState.Entry)
+                    return cached.FullPath;
+                // Если файл или папка точно отсутствуют в кеше и на сервере
+                if (getState == EntryCache.GetState.NotExists)
                     continue;
-                Folder folder = item.Result;
-                // Вместо перебора и сравнения всех названий файлов в папке,
-                // формируем полный путь файла, как если бы он был в данной папке,
-                // а затем проверяем наличие в словаре Files по FullPath.
-                string fullPath = Path.Combine(folder.FullPath, filename);
-                if (folder.Files.TryGetValue(fullPath, out _))
-                    return true;
+                // В остальных случаях будем искать дальше
+                paths.Add(folderPath);
+            }
+            if (paths.Count == 0)
+                return null;
+
+            // В кеше файла не оказалось, читаем все директории и смотрим а них
+
+            var tasks = paths
+                .AsParallel()
+                .WithDegreeOfParallelism(paths.Count)
+                .Select(async path => await GetItemAsync(path, ItemType.Folder, false));
+
+            if (tasks is null)
+                return null;
+
+            foreach (var task in tasks)
+            {
+                if (task.Result is null)
+                    continue;
+                IEntry entry = task.Result;
+                if (entry.Name.Equals(nameWithoutPathToFind, StringComparison.InvariantCultureIgnoreCase))
+                    return entry.FullPath;
+
+                foreach (var child in entry.Descendants)
+                {
+                    if (child.Name.Equals(nameWithoutPathToFind, StringComparison.InvariantCultureIgnoreCase))
+                        return child.FullPath;
+                }
             }
 
-            return false;
+            return null;
         }
 
         #region == Publish ==========================================================================================================================
 
         private async Task<bool> Unpublish(Uri publicLink, string fullPath)
         {
-            //var res = (await new UnpublishRequest(CloudApi, publicLink).MakeRequestAsync())
-            var res = (await  Account.RequestRepo.Unpublish(publicLink, fullPath))
+            //var res = (await new UnpublishRequest(CloudApi, publicLink).MakeRequestAsync(_connectionLimiter))
+            var res = (await Account.RequestRepo.Unpublish(publicLink, fullPath))
                 .ThrowIf(r => !r.IsSuccess, _ => new Exception($"Unpublish error, link = {publicLink}"));
 
             return res.IsSuccess;
@@ -264,7 +466,7 @@ namespace YaR.Clouds
                 await Unpublish(innerFile.GetPublicLinks(this).First().Uri, innerFile.FullPath);
                 innerFile.PublicLinks.Clear();
             }
-            _itemCache.Invalidate(file.FullPath, file.Path);
+            _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
         }
 
 
@@ -272,7 +474,7 @@ namespace YaR.Clouds
         {
             var res = (await Account.RequestRepo.Publish(fullPath))
                 .ThrowIf(r => !r.IsSuccess, _ => new Exception($"Publish error, path = {fullPath}"));
-                
+
             var uri = new Uri(res.Url, UriKind.RelativeOrAbsolute);
             if (!uri.IsAbsoluteUri)
                 uri = new Uri($"{Account.RequestRepo.PublicBaseUrlDefault.TrimEnd('/')}/{res.Url.TrimStart('/')}", UriKind.Absolute);
@@ -280,7 +482,7 @@ namespace YaR.Clouds
             return uri;
         }
 
-        public async Task<PublishInfo> Publish(File file, bool makeShareFile = true, 
+        public async Task<PublishInfo> Publish(File file, bool makeShareFile = true,
             bool generateDirectVideoLink = false, bool makeM3UFile = false, SharedVideoResolution videoResolution = SharedVideoResolution.All)
         {
             if (file.Files.Count > 1 && (generateDirectVideoLink || makeM3UFile))
@@ -296,7 +498,7 @@ namespace YaR.Clouds
 
             if (makeShareFile)
             {
-                string path = $"{file.FullPath}{PublishInfo.SharedFilePostfix}";
+                string path = string.Concat(file.FullPath, PublishInfo.SharedFilePostfix);
                 UploadFileJson(path, info)
                     .ThrowIf(r => !r, _ => new Exception($"Cannot upload JSON file, path = {path}"));
             }
@@ -304,14 +506,14 @@ namespace YaR.Clouds
 
             if (makeM3UFile)
             {
-                string path = $"{file.FullPath}{PublishInfo.PlaylistFilePostfix}";
+                string path = string.Concat(file.FullPath, PublishInfo.PlayListFilePostfix);
                 var content = new StringBuilder();
                 {
                     content.Append("#EXTM3U\r\n");
                     foreach (var item in info.Items)
                     {
                         content.Append($"#EXTINF:-1,{WebDavPath.Name(item.Path)}\r\n");
-                        content.Append($"{item.PlaylistUrl}\r\n");
+                        content.Append($"{item.PlayListUrl}\r\n");
                     }
                 }
                 UploadFile(path, content.ToString())
@@ -328,7 +530,7 @@ namespace YaR.Clouds
             folder.PublicLinks.TryAdd(url.AbsolutePath, new PublicLinkInfo(url));
             var info = folder.ToPublishInfo();
 
-            if (!makeShareFile) 
+            if (!makeShareFile)
                 return info;
 
             string path = WebDavPath.Combine(folder.FullPath, PublishInfo.SharedFilePostfix);
@@ -338,7 +540,7 @@ namespace YaR.Clouds
             return info;
         }
 
-        public async Task<PublishInfo> Publish(IEntry entry, bool makeShareFile = true, 
+        public async Task<PublishInfo> Publish(IEntry entry, bool makeShareFile = true,
             bool generateDirectVideoLink = false, bool makeM3UFile = false, SharedVideoResolution videoResolution = SharedVideoResolution.All)
         {
             return entry switch
@@ -377,9 +579,14 @@ namespace YaR.Clouds
                 }
             }
 
-            //var copyRes = await new CopyRequest(CloudApi, folder.FullPath, destinationPath).MakeRequestAsync();
+            //var copyRes = await new CopyRequest(CloudApi, folder.FullPath, destinationPath).MakeRequestAsync(_connectionLimiter);
             var copyRes = await Account.RequestRepo.Copy(folder.FullPath, destinationPath);
-            if (!copyRes.IsSuccess) return false;
+            if (!copyRes.IsSuccess)
+                return false;
+
+            _entryCache.ResetCheck();
+            _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
+            _entryCache.OnRemoveTreeAsync(folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
 
             //clone all inner links
             if (LinkManager is not null)
@@ -397,13 +604,11 @@ namespace YaR.Clouds
                         if (await Rename(cloneres.Path, linka.Name))
                             continue;
 
-                        _itemCache.Invalidate(destinationPath);
                         return false;
                     }
                 }
             }
 
-            _itemCache.Invalidate(destinationPath);
             return true;
         }
 
@@ -416,7 +621,8 @@ namespace YaR.Clouds
         public async Task<bool> Copy(string sourcePath, string destinationPath)
         {
             var entry = await GetItemAsync(sourcePath);
-            if (entry is null) return false;
+            if (entry is null)
+                return false;
 
             return await Copy(entry, destinationPath);
         }
@@ -465,32 +671,43 @@ namespace YaR.Clouds
                     {
                         string newFullPath = WebDavPath.Combine(destPath, WebDavPath.Name(cloneRes.Path));
                         var renameRes = await Rename(newFullPath, link.Name);
-                        if (!renameRes) return false;
+                        if (!renameRes)
+                            return false;
                     }
-                    if (cloneRes.IsSuccess) _itemCache.Invalidate(destinationPath);
-                    return cloneRes.IsSuccess;
+
+                    if (!cloneRes.IsSuccess)
+                        return false;
+
+                    _entryCache.ResetCheck();
+                    _entryCache.OnCreateAsync(destPath, GetItemAsync(destPath, fastGetFromCloud: true));
+                    _entryCache.OnRemoveTreeAsync(link.Href.OriginalString, GetItemAsync(link.Href.OriginalString, fastGetFromCloud: true));
+
+                    return true;
                 }
             }
 
             var qry = file.Files
                     .AsParallel()
-                    .WithDegreeOfParallelism(Math.Min(MaxInnerParallelRequests, file.Files.Count))
+                    .WithDegreeOfParallelism(file.Files.Count)
                     .Select(async pfile =>
                     {
-                        //var copyRes = await new CopyRequest(CloudApi, pfile.FullPath, destPath, ConflictResolver.Rewrite).MakeRequestAsync();
+                        //var copyRes = await new CopyRequest(CloudApi, pfile.FullPath, destPath, ConflictResolver.Rewrite).MakeRequestAsync(_connectionLimiter);
                         var copyRes = await Account.RequestRepo.Copy(pfile.FullPath, destPath, ConflictResolver.Rewrite);
                         if (!copyRes.IsSuccess) return false;
 
-                        if (!doRename && WebDavPath.Name(copyRes.NewName) == newName) 
+                        if (!doRename && WebDavPath.Name(copyRes.NewName) == newName)
                             return true;
 
                         string newFullPath = WebDavPath.Combine(destPath, WebDavPath.Name(copyRes.NewName));
                         return await Rename(newFullPath, pfile.Name.Replace(file.Name, newName));
                     });
 
-            _itemCache.Invalidate(destinationPath);
             bool res = (await Task.WhenAll(qry))
                 .All(r => r);
+
+            _entryCache.ResetCheck();
+            _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
+            _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
 
             return res;
         }
@@ -526,7 +743,7 @@ namespace YaR.Clouds
         /// <param name="folder">Source folder info.</param>
         /// <param name="newFileName">New folder name.</param>
         /// <returns>True or false operation result.</returns>
-        public async Task<bool> Rename(Folder folder, string newFileName) 
+        public async Task<bool> Rename(Folder folder, string newFileName)
             => await Rename(folder.FullPath, newFileName);
 
         /// <summary>
@@ -539,7 +756,7 @@ namespace YaR.Clouds
         {
             var result = await Rename(file.FullPath, newFileName).ConfigureAwait(false);
 
-            if (file.Files.Count <= 1) 
+            if (file.Files.Count <= 1)
                 return result;
 
             foreach (var splitFile in file.Parts)
@@ -559,18 +776,21 @@ namespace YaR.Clouds
         /// <returns>True or false result operation.</returns>
         private async Task<bool> Rename(string fullPath, string newName)
         {
-            var link = LinkManager is null? null : await LinkManager.GetItemLink(fullPath, false);
+            var link = LinkManager is null ? null : await LinkManager.GetItemLink(fullPath, false);
 
             //rename item
             if (link is null)
             {
                 var data = await Account.RequestRepo.Rename(fullPath, newName);
 
-                if (!data.IsSuccess) 
+                if (!data.IsSuccess)
                     return data.IsSuccess;
 
-                LinkManager.ProcessRename(fullPath, newName);
-                _itemCache.Invalidate(fullPath, WebDavPath.Parent(fullPath));
+                LinkManager?.ProcessRename(fullPath, newName);
+                string newNamePath = WebDavPath.Combine(WebDavPath.Parent(fullPath), newName);
+                _entryCache.ResetCheck();
+                _entryCache.OnCreateAsync(newNamePath, GetItemAsync(newNamePath, fastGetFromCloud: true));
+                _entryCache.OnRemoveTreeAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
 
                 return data.IsSuccess;
             }
@@ -580,7 +800,11 @@ namespace YaR.Clouds
             {
                 bool res = LinkManager.RenameLink(link, newName);
                 if (res)
-                    _itemCache.Invalidate(fullPath, WebDavPath.Parent(fullPath));
+                {
+                    _entryCache.ResetCheck();
+                    _entryCache.OnCreateAsync(newName, GetItemAsync(newName, fastGetFromCloud: true));
+                    _entryCache.OnRemoveTreeAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
+                }
                 return res;
             }
             return false;
@@ -625,9 +849,9 @@ namespace YaR.Clouds
 
 
         /// <summary>
-        /// Move folder in another space on the server.
+        /// Move folder to another place on the server.
         /// </summary>
-        /// <param name="folder">Folder info to move.</param>
+        /// <param name="folder">Folder to move.</param>
         /// <param name="destinationPath">Destination path on the server.</param>
         /// <returns>True or false operation result.</returns>
         public async Task<bool> MoveAsync(Folder folder, string destinationPath)
@@ -637,13 +861,21 @@ namespace YaR.Clouds
             {
                 var remapped = await LinkManager.RemapLink(link, destinationPath);
                 if (remapped)
-                    _itemCache.Invalidate(WebDavPath.Parent(folder.FullPath), destinationPath);
+                {
+                    _entryCache.ResetCheck();
+                    _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
+                    _entryCache.OnRemoveTreeAsync(folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
+                }
                 return remapped;
             }
 
             var res = await Account.RequestRepo.Move(folder.FullPath, destinationPath);
-            _itemCache.Invalidate(WebDavPath.Parent(folder.FullPath), destinationPath);
-            if (!res.IsSuccess) return false;
+            _entryCache.ResetCheck();
+            _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
+            _entryCache.OnRemoveTreeAsync(folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
+
+            if (!res.IsSuccess)
+                return false;
 
             //clone all inner links
             if (LinkManager is not null)
@@ -661,7 +893,6 @@ namespace YaR.Clouds
                     if (!cloneres.IsSuccess)
                         continue;
 
-                    _itemCache.Invalidate(destinationPath);
                     if (WebDavPath.Name(cloneres.Path) != linka.Name)
                     {
                         var renRes = await Rename(cloneres.Path, linka.Name);
@@ -688,25 +919,29 @@ namespace YaR.Clouds
             {
                 var remapped = await LinkManager.RemapLink(link, destinationPath);
                 if (remapped)
-                    _itemCache.Invalidate(file.Path, destinationPath);
+                {
+                    _entryCache.ResetCheck();
+                    _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
+                    _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
+                }
                 return remapped;
             }
 
             var qry = file.Files
                 .AsParallel()
-                .WithDegreeOfParallelism(Math.Min(MaxInnerParallelRequests, file.Files.Count))
+                .WithDegreeOfParallelism(file.Files.Count)
                 .Select(async pfile =>
                 {
-                    var moveres =  await Account.RequestRepo.Move(pfile.FullPath, destinationPath);
-                    _itemCache.Forget(file.Path, pfile.FullPath);
-                    return moveres;
+                    return await Account.RequestRepo.Move(pfile.FullPath, destinationPath);
                 });
 
-            _itemCache.Forget(file.Path, file.FullPath);
-            _itemCache.Invalidate(destinationPath);
 
             bool res = (await Task.WhenAll(qry))
                 .All(r => r.IsSuccess);
+
+            _entryCache.ResetCheck();
+            _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
+            _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
 
             return res;
         }
@@ -751,7 +986,7 @@ namespace YaR.Clouds
             // remove all parts if file splitted
             var qry = file.Files
                 .AsParallel()
-                .WithDegreeOfParallelism(Math.Min(MaxInnerParallelRequests, file.Files.Count))
+                .WithDegreeOfParallelism(file.Files.Count)
                 .Select(async pfile =>
                 {
                     var removed = await Remove(pfile.FullPath);
@@ -764,25 +999,32 @@ namespace YaR.Clouds
                 if (file.Name.EndsWith(PublishInfo.SharedFilePostfix))  //unshare master item
                 {
                     var mpath = WebDavPath.Clean(file.FullPath.Substring(0, file.FullPath.Length - PublishInfo.SharedFilePostfix.Length));
-                    var item = await GetItemAsync(mpath);
+                    var entry = await GetItemAsync(mpath);
 
-
-                    switch (item)
+                    switch (entry)
                     {
-                        case Folder folder:
-                            await Unpublish(folder.GetPublicLinks(this).First().Uri, folder.FullPath);
-                            break;
-                        case File ifile:
-                            await Unpublish(ifile);
-                            break;
+                    case Folder folder:
+                        await Unpublish(folder.GetPublicLinks(this).First().Uri, folder.FullPath);
+                        break;
+                    case File ifile:
+                        await Unpublish(ifile);
+                        break;
                     }
                 }
                 else
                 {
                     if (removeShareDescription) //remove share description (.wdmrc.share)
                     {
-                        if (await GetItemAsync(file.FullPath + PublishInfo.SharedFilePostfix) is File sharefile)
+                        string fullName = string.Concat(file.FullPath, PublishInfo.SharedFilePostfix);
+                        string path = WebDavPath.Parent(file.FullPath);
+                        string name = WebDavPath.Name(file.FullPath);
+                        string foundFullPath = Find(name, path);
+
+                        if (foundFullPath is not null &&
+                            await GetItemAsync(foundFullPath) is File sharefile)
+                        {
                             await Remove(sharefile, false);
+                        }
                     }
                 }
 
@@ -796,33 +1038,36 @@ namespace YaR.Clouds
         /// </summary>
         /// <param name="fullPath">Full file or folder name.</param>
         /// <returns>True or false result operation.</returns>
-        private async Task<bool> Remove(string fullPath)
+        public async Task<bool> Remove(string fullPath)
         {
-            //TODO: refact
-            var link = LinkManager is null ? null : await LinkManager.GetItemLink(fullPath, false);
-
-            if (link is not null)
+            if (LinkManager is not null)
             {
-                //if folder is linked - do not delete inner files/folders if client deleting recursively
-                //just try to unlink folder
-                LinkManager.RemoveLink(fullPath);
-
-                _itemCache.Invalidate(WebDavPath.Parent(fullPath));
-                return true;
+                var link = await LinkManager.GetItemLink(fullPath, false);
+                if (link is not null)
+                {
+                    // if folder is linked - do not delete inner files/folders
+                    // if client deleting recursively just try to unlink folder
+                    LinkManager.RemoveLink(fullPath);
+                    _entryCache.ResetCheck();
+                    _entryCache.OnRemoveTreeAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
+                    return true;
+                }
             }
 
             var res = await Account.RequestRepo.Remove(fullPath);
-            if (!res.IsSuccess) 
+            if (!res.IsSuccess)
                 return false;
 
-            //remove inner links
+            // remove inner links
             if (LinkManager is not null)
             {
                 var innerLinks = LinkManager.GetChildren(fullPath);
                 LinkManager.RemoveLinks(innerLinks);
             }
 
-            _itemCache.Forget(WebDavPath.Parent(fullPath), fullPath); //_itemCache.Invalidate(WebDavPath.Parent(fullPath));
+            _entryCache.ResetCheck();
+            _entryCache.OnRemoveTreeAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
+
             return res.IsSuccess;
         }
 
@@ -856,15 +1101,7 @@ namespace YaR.Clouds
             CancelToken.Cancel(false);
         }
 
-        public byte MaxInnerParallelRequests
-        {
-            get => _maxInnerParallelRequests;
-            set => _maxInnerParallelRequests = value != 0 ? value : (byte)1;
-        }
-
         public IRequestRepo Repo => Account.RequestRepo;
-
-        private byte _maxInnerParallelRequests = 5;
 
         /// <summary>
         /// Create folder on the server.
@@ -886,7 +1123,12 @@ namespace YaR.Clouds
         {
             var res = await Account.RequestRepo.CreateFolder(fullPath);
 
-            if (res.IsSuccess) _itemCache.Invalidate(WebDavPath.Parent(fullPath));
+            if (res.IsSuccess)
+            {
+                _entryCache.ResetCheck();
+                _entryCache.OnCreateAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
+            }
+
             return res.IsSuccess;
         }
 
@@ -896,18 +1138,22 @@ namespace YaR.Clouds
         //}
 
 
-        public async Task<CloneItemResult> CloneItem(string path, string url)
+        public async Task<CloneItemResult> CloneItem(string toPath, string fromUrl)
         {
-            var res = await Account.RequestRepo.CloneItem(url, path);
+            var res = await Account.RequestRepo.CloneItem(fromUrl, toPath);
 
-            if (res.IsSuccess) _itemCache.Invalidate(path);
+            if (res.IsSuccess)
+            {
+                _entryCache.ResetCheck();
+                _entryCache.OnCreateAsync(toPath, GetItemAsync(toPath, fastGetFromCloud: true));
+            }
             return res;
         }
 
         public async Task<Stream> GetFileDownloadStream(File file, long? start, long? end)
         {
-            var task = Task.FromResult(new DownloadStreamFabric(this).Create(file, start, end))
-                .ConfigureAwait(false);
+            var result = new DownloadStreamFabric(this).Create(file, start, end);
+            var task = Task.FromResult(result).ConfigureAwait(false);
             Stream stream = await task;
             return stream;
         }
@@ -917,10 +1163,9 @@ namespace YaR.Clouds
         {
             var file = new File(fullFilePath, size);
 
-
             var f = new UploadStreamFabric(this)
             {
-                FileStreamSent = fileStreamSent, 
+                FileStreamSent = fileStreamSent,
                 ServerFileProcessed = serverFileProcessed
             };
 
@@ -936,8 +1181,11 @@ namespace YaR.Clouds
         private void OnFileUploaded(IEnumerable<File> files)
         {
             var lst = files.ToList();
-            _itemCache.Invalidate(lst.Select(f => f.FullPath));
-            _itemCache.Invalidate(lst.Select(file => file.Path).Distinct());
+            foreach (var file in lst)
+            {
+                _entryCache.OnCreateAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
+            }
+            _entryCache.ResetCheck();
             FileUploaded?.Invoke(lst);
         }
 
@@ -951,15 +1199,6 @@ namespace YaR.Clouds
             return ser.Deserialize<T>(jsonReader);
         }
 
-        public string DownloadFileAsString(File file)
-        {
-            using var stream = Account.RequestRepo.GetDownloadStream(file);
-            using var reader = new StreamReader(stream);
-
-            string res = reader.ReadToEnd();
-            return res;
-        }
-
         /// <summary>
         /// Download content of file
         /// </summary>
@@ -969,8 +1208,16 @@ namespace YaR.Clouds
         {
             try
             {
-                var file = (File)await GetItemAsync(path);
-                return DownloadFileAsString(file);
+                var entry = await GetItemAsync(path);
+                if (entry is null || entry is not File file)
+                    return null;
+                {
+                    using var stream = Account.RequestRepo.GetDownloadStream(file);
+                    using var reader = new StreamReader(stream);
+
+                    string res = await reader.ReadToEndAsync();
+                    return res;
+                }
             }
             catch (Exception e)
                 when (  // let's check if there really no file or just other network error
@@ -989,11 +1236,13 @@ namespace YaR.Clouds
 
         public bool UploadFile(string path, byte[] content, bool discardEncryption = false)
         {
-            using (var stream = GetFileUploadStream(path, content.Length, null, null,  discardEncryption).Result)
+            using (var stream = GetFileUploadStream(path, content.Length, null, null, discardEncryption).Result)
             {
                 stream.Write(content, 0, content.Length);
             }
-            _itemCache.Invalidate(path, WebDavPath.Parent(path));
+
+            _entryCache.ResetCheck();
+            _entryCache.OnCreateAsync(path, GetItemAsync(path, fastGetFromCloud: true));
 
             return true;
         }
@@ -1003,7 +1252,6 @@ namespace YaR.Clouds
         {
             var data = Encoding.UTF8.GetBytes(content);
             return UploadFile(path, data, discardEncryption);
-            
         }
 
         public bool UploadFileJson<T>(string fullFilePath, T data, bool discardEncryption = false)
@@ -1041,7 +1289,7 @@ namespace YaR.Clouds
             if (res)
             {
                 LinkManager.Save();
-                _itemCache.Invalidate(path);
+                _entryCache.OnCreateAsync(path, GetItemAsync(path, fastGetFromCloud: true));
             }
             return res;
         }
@@ -1052,15 +1300,19 @@ namespace YaR.Clouds
                 return;
 
             var count = await LinkManager.RemoveDeadLinks(true);
-            if (count > 0) _itemCache.Invalidate();
+            if (count > 0)
+                _entryCache.Clear();
         }
 
         public async Task<AddFileResult> AddFile(IFileHash hash, string fullFilePath, long size, ConflictResolver? conflict = null)
         {
             var res = await Account.RequestRepo.AddFile(fullFilePath, hash, size, DateTime.Now, conflict);
-            
+
             if (res.Success)
-                _itemCache.Invalidate(fullFilePath, WebDavPath.Parent(fullFilePath));
+            {
+                _entryCache.ResetCheck();
+                _entryCache.OnCreateAsync(fullFilePath, GetItemAsync(fullFilePath, fastGetFromCloud: true));
+            }
 
             return res;
         }
@@ -1082,7 +1334,7 @@ namespace YaR.Clouds
             if (res)
             {
                 file.LastWriteTimeUtc = dateTime;
-                _itemCache.Invalidate(file.Path, file.FullPath);
+                _entryCache.OnCreateAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
             }
 
             return res;
