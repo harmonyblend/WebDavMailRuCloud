@@ -106,6 +106,15 @@ namespace WinServiceInstaller
                     ))
                     throw new Exception("Error while installing the service\r\n" + consoleText);
             }
+            {
+                // В случае сбоя сервиса, система его сразу автоматически перезапустит
+                string consoleText = RunSc("failure", _name, "reset=", "0", "actions=", "restart/0");
+                if (!(consoleText.Contains("успех", StringComparison.OrdinalIgnoreCase)
+                    || consoleText.Contains("success", StringComparison.OrdinalIgnoreCase)
+                    || consoleText.Contains("PENDING", StringComparison.OrdinalIgnoreCase)
+                    ))
+                    throw new Exception("Error while installing the service\r\n" + consoleText);
+            }
 
             string cmd = string.IsNullOrWhiteSpace(CommandLine)
                 ? exePath
@@ -198,12 +207,12 @@ namespace WinServiceInstaller
 
 #if NET7_0_WINDOWS
 
-        private bool NeedWaitSc(string serviceName)
+        private static bool NeedWaitSc(string serviceName)
         {
             return RunSc("query", serviceName).Contains("PENDING", StringComparison.OrdinalIgnoreCase);
         }
 
-        private string RunSc(params string[] args)
+        private static string RunSc(params string[] args)
         {
             StringBuilder sb = new StringBuilder();
             foreach (var item in args)
