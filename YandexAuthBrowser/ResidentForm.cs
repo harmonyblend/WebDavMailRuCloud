@@ -13,8 +13,9 @@ namespace YandexAuthBrowser
 {
     public partial class ResidentForm : Form
     {
-        private static readonly Regex UrlRegex =
-            new Regex("http://[^/]*/(?<login>.*?)/(?<password>.*?)/", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        [GeneratedRegex("http://[^/]*/(?<login>.*?)/(?<password>.*?)/", RegexOptions.IgnoreCase)]
+        private static partial Regex CompiledUrlRegex();
+        private static readonly Regex UrlRegex = CompiledUrlRegex();
 
         private HttpListener? Listener;
         private bool RunServer = false;

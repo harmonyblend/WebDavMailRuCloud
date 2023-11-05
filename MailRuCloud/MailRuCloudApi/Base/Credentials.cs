@@ -6,18 +6,33 @@ using YaR.Clouds.Base.Repos.MailRuCloud;
 
 namespace YaR.Clouds.Base
 {
-    public class Credentials : IBasicCredentials
+    public partial class Credentials : IBasicCredentials
     {
         private static readonly string[] AnonymousLogins = { "anonymous", "anon", "anonym", string.Empty };
 
         // протокол # логин # разделитель
-        private static Regex _loginRegex1 = new Regex("^([^#]*)#([^#]*)#([^#]*)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private const string RegexMask1 = "^([^#]*)#([^#]*)#([^#]*)$";
         // протокол # логин
-        private static Regex _loginRegex2 = new Regex(
-            "^(1|2|WebM1Bin|WebV2|YadWeb|YadWebV2)#([^#]*)$",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private const string RegexMask2 = "^(1|2|WebM1Bin|WebV2|YadWeb|YadWebV2)#([^#]*)$";
         // логин # разделитель
-        private static Regex _loginRegex3 = new Regex("^([^#]*)#([^#]*)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private const string RegexMask3 = "^([^#]*)#([^#]*)$";
+
+#if NET7_0_OR_GREATER
+        private static readonly Regex _loginRegex1 = LoginRegexMask1();
+        private static readonly Regex _loginRegex2 = LoginRegexMask2();
+        private static readonly Regex _loginRegex3 = LoginRegexMask3();
+
+        [GeneratedRegex(RegexMask1, RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+        private static partial Regex LoginRegexMask1();
+        [GeneratedRegex(RegexMask2, RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+        private static partial Regex LoginRegexMask2();
+        [GeneratedRegex(RegexMask3, RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+        private static partial Regex LoginRegexMask3();
+#else
+        private static readonly Regex _loginRegex1 = new Regex(RegexMask1, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _loginRegex2 = new Regex(RegexMask2, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _loginRegex3 = new Regex(RegexMask3, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+#endif
 
         public Credentials(string login, string password)
         {
@@ -144,7 +159,7 @@ namespace YaR.Clouds.Base
 
         public bool CanCrypt => !string.IsNullOrEmpty(PasswordCrypt);
 
-        private CloudType StringToCloud(string login)
+        private static CloudType StringToCloud(string login)
         {
             foreach (var domain in MailRuBaseRepo.AvailDomains)
             {
@@ -160,9 +175,13 @@ namespace YaR.Clouds.Base
 
 #if NET48
             bool hasYandex = System.Globalization.CultureInfo.CurrentCulture.CompareInfo
-                .IndexOf(login, "@yandex.", System.Globalization.CompareOptions.OrdinalIgnoreCase) >= 0;
+                .IndexOf(login, "@yandex.", System.Globalization.CompareOptions.OrdinalIgnoreCase) >= 0 ||
+                System.Globalization.CultureInfo.CurrentCulture.CompareInfo
+                .IndexOf(login, "@ya.", System.Globalization.CompareOptions.OrdinalIgnoreCase) >= 0;
 #else
-            bool hasYandex = login.Contains("@yandex.", StringComparison.InvariantCultureIgnoreCase);
+            bool hasYandex =
+                login.Contains("@yandex.", StringComparison.InvariantCultureIgnoreCase) ||
+                login.Contains("@ya.", StringComparison.InvariantCultureIgnoreCase);
 #endif
             if (hasYandex)
                 return CloudType.Yandex;
@@ -170,7 +189,7 @@ namespace YaR.Clouds.Base
             return CloudType.Unkown;
         }
 
-        private Protocol StringToProtocol(string protocol, CloudType cloud)
+        private static Protocol StringToProtocol(string protocol, CloudType cloud)
         {
             switch (protocol)
             {
@@ -229,7 +248,7 @@ namespace YaR.Clouds.Base
                 "protocol version needs fully qualified login using email format. See manuals.");
         }
 
-        private (string login, string password, string encPassword) StringToLoginPassword(
+        private static (string login, string password, string encPassword) StringToLoginPassword(
             string loginPart, string separatorPart, string passwordPart)
         {
             if (string.IsNullOrEmpty(separatorPart))

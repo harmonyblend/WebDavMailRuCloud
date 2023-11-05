@@ -38,7 +38,7 @@ namespace YaR.Clouds.Base.Streams.Cache
             foreach (var rule in _deduplicateRules.Rules)
             {
                 if (
-                    (rule.MaxSize == 0 || rule.MaxSize > _file.Size) && 
+                    (rule.MaxSize == 0 || rule.MaxSize > _file.Size) &&
                     _file.Size >= rule.MinSize &&
                     (string.IsNullOrEmpty(rule.Target) || Regex.Match(_file.FullPath, rule.Target).Success) )
                 {

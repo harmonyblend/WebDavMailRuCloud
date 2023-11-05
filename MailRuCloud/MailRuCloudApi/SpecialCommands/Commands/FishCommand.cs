@@ -15,7 +15,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(FishCommand));
 
-        public FishCommand(Cloud cloud, string path, IList<string> parames) : base(cloud, path, parames)
+        public FishCommand(Cloud cloud, string path, IList<string> parameters) : base(cloud, path, parameters)
         {
         }
 
@@ -48,7 +48,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                     Logger.Warn("╚═╝╚═╩══╩═╝╚═╝╚╩╩╝");
                     Logger.Warn("");
                     Logger.Warn("¦̵̱ ̵̱ ̵̱ ̵̱ ̵̱(̢ ̡͇̅└͇̅┘͇̅ (▤8כ−◦");
-                    
+
                 }
             }
             catch (Exception)

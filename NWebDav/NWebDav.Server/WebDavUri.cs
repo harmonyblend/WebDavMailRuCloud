@@ -14,13 +14,13 @@ namespace NWebDav.Server
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="baseUrl"></param>
-        /// <param name="relaUrl">encoded webdav path</param>
-        public WebDavUri(string baseUrl, string relaUrl)
+        /// <param name="relativeUrl">encoded webdav path</param>
+        public WebDavUri(string baseUrl, string relativeUrl)
         {
-            AbsoluteUri = baseUrl + relaUrl;
+            AbsoluteUri = baseUrl + relativeUrl;
             //_fakeurl = new Uri(AbsoluteUri);
         }
 
@@ -34,7 +34,7 @@ namespace NWebDav.Server
 
         public string OriginalString => AbsoluteUri;
 
-        public string Scheme 
+        public string Scheme
         {
             get
             {
@@ -59,7 +59,7 @@ namespace NWebDav.Server
             get
             {
                 if (string.IsNullOrEmpty(_path))
-                { 
+                {
                     var z = PathEncoded;
                     if (string.IsNullOrEmpty(z) || z == "/")
                         _path = z;
@@ -140,7 +140,7 @@ namespace NWebDav.Server
                     Parent = new WebDavUri(trimmedUri.Substring(0, slashOffset)),
                     Name = Uri.UnescapeDataString(trimmedUri.Substring(slashOffset + 1))
                 };
-               
+
             }
         }
 

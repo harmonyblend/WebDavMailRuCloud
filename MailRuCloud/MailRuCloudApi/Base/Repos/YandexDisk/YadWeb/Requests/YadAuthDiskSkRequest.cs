@@ -5,7 +5,7 @@ using YaR.Clouds.Base.Requests;
 
 namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 {
-    class YadAuthDiskSkRequest : BaseRequestString<YadAuthDiskSkRequestResult>
+    internal partial class YadAuthDiskSkRequest : BaseRequestString<YadAuthDiskSkRequestResult>
     {
         public YadAuthDiskSkRequest(HttpCommonSettings settings, YadWebAuth auth) : base(settings, auth)
         {
@@ -33,7 +33,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
         protected override RequestResponse<YadAuthDiskSkRequestResult> DeserializeMessage(NameValueCollection responseHeaders, string responseText)
         {
-            var matchSk = Regex.Match(responseText, Regex1);
+            var matchSk = s_skRegex.Match(responseText);
 
             var msg = new RequestResponse<YadAuthDiskSkRequestResult>
             {
@@ -48,8 +48,14 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
             return msg;
         }
 
-        private const string Regex1 = @"""sk"":""(?<sk>.+?)""";
-        //private const string _regex2 = @"sk=(?<sk>.*?)&";  // не надо, значит, уже все плохо
+        private const string SkRegexMask = @"""sk"":""(?<sk>.+?)""";
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(SkRegexMask)]
+        private static partial Regex SkRegex();
+        private static readonly Regex s_skRegex = SkRegex();
+#else
+        private static readonly Regex s_skRegex = new(SkRegexMask, RegexOptions.Compiled);
+#endif
     }
 
     class YadAuthDiskSkRequestResult

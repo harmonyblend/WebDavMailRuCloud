@@ -92,7 +92,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2
 
                     throw new InvalidCredentialException(txt);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     Logger.Error("Browser authentication failed! " +
                         "Check the URL and the password for browser authentication component!");

@@ -26,7 +26,7 @@ namespace YaR.Clouds
     /// <summary>
     /// Cloud client.
     /// </summary>
-    public class Cloud : IDisposable
+    public partial class Cloud : IDisposable
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(Cloud));
 
@@ -163,9 +163,16 @@ namespace YaR.Clouds
             }
         }
 
+        private const string MailRuPublicRegexMask = @"\A/(?<uri>https://cloud\.mail\.\w+/public/\S+/\S+(/.*)?)\Z";
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(MailRuPublicRegexMask, RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+        private static partial Regex MailRuPublicRegex();
+        private static readonly Regex _mailRegex = MailRuPublicRegex();
+#else
         private static readonly Regex _mailRegex =
-            new Regex(@"\A/(?<uri>https://cloud\.mail\.\w+/public/\S+/\S+(/.*)?)\Z",
-                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            new Regex(MailRuPublicRegexMask, RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+#endif
 
         /// <summary>
         /// Данный метод запускается для каждого path только в одном потоке.
@@ -1225,12 +1232,12 @@ namespace YaR.Clouds
             }
             catch (Exception e)
                 when (  // let's check if there really no file or just other network error
-                    (e is AggregateException &&
+                    e is AggregateException &&
                      e.InnerException is WebException we &&
-                     we.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound })
+                     we.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound }
                     ||
-                    (e is WebException wee &&
-                     wee.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound })
+                    e is WebException wee &&
+                     wee.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound }
                 )
             {
                 return null;

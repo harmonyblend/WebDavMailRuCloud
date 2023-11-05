@@ -6,8 +6,17 @@ using YaR.Clouds.Base.Repos.MailRuCloud;
 
 namespace YaR.CloudMailRu.Client.Console
 {
-    static class UploadStub
+    static partial class UploadStub
     {
+        private const string UploadRegexMask = @"\A\\\\\\.*?\\.*?\\";
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(UploadRegexMask)]
+        private static partial Regex UploadRegex();
+        private static readonly Regex s_uploadRegex = UploadRegex();
+#else
+        private static readonly Regex s_uploadRegex = new(UploadRegexMask, RegexOptions.Compiled);
+#endif
+
         public static int Upload(UploadOptions cmdOptions)
         {
             string user = cmdOptions.Login;
@@ -18,9 +27,7 @@ namespace YaR.CloudMailRu.Client.Console
 
 
             if (targetpath.StartsWith(@"\\\"))
-#pragma warning disable SYSLIB1045 // Convert to 'GeneratedRegexAttribute'.
-                targetpath = Regex.Replace(targetpath, @"\A\\\\\\.*?\\.*?\\", @"\");
-#pragma warning restore SYSLIB1045 // Convert to 'GeneratedRegexAttribute'.
+                targetpath = s_uploadRegex.Replace(targetpath, @"\");
 
             targetpath = WebDavPath.Clean(targetpath);
 

@@ -51,13 +51,19 @@ namespace NWebDav.Server.Helpers
     /// <summary>
     /// Helper methods for <see cref="IHttpRequest"/> objects.
     /// </summary>
-    public static class RequestHelper
+    public static partial class RequestHelper
     {
 #if DEBUG
-        private static readonly NWebDav.Server.Logging.ILogger s_log = NWebDav.Server.Logging.LoggerFactory.CreateLogger(typeof(ResponseHelper));
+        private static readonly Logging.ILogger s_log = Logging.LoggerFactory.CreateLogger(typeof(ResponseHelper));
 #endif
-        private static readonly Regex s_rangeRegex = new("bytes\\=(?<start>[0-9]*)-(?<end>[0-9]*)");
-
+        private const string RangeRegexMask = "bytes\\=(?<start>[0-9]*)-(?<end>[0-9]*)";
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(RangeRegexMask)]
+        private static partial Regex RangeRegex();
+        private static readonly Regex s_rangeRegex = RangeRegex();
+#else
+        private static readonly Regex s_rangeRegex = new(RangeRegexMask, RegexOptions.Compiled);
+#endif
         /// <summary>
         /// Split an URI into a collection and name part.
         /// </summary>
@@ -102,7 +108,7 @@ namespace NWebDav.Server.Helpers
 
             // Create the destination URI
             return destinationHeader.StartsWith("/") ? new WebDavUri(request.Url.BaseUrl, destinationHeader) : new WebDavUri(destinationHeader);
-        }        
+        }
 
         /// <summary>
         /// Obtain the depth value from the request.
@@ -140,7 +146,7 @@ namespace NWebDav.Server.Helpers
         /// </returns>
         /// <remarks>
         /// If the Overwrite header is not set, then the specification
-        /// specifies that it should be interpreted as 
+        /// specifies that it should be interpreted as
         /// <see langwordk="true"/>.
         /// </remarks>
         public static bool GetOverwrite(this IHttpRequest request)
@@ -171,7 +177,7 @@ namespace NWebDav.Server.Helpers
                 return null;
 
             // Return each item
-            int ParseTimeout(string t)
+            static int ParseTimeout(string t)
             {
                 // Check for 'infinite'
                 if (t == "Infinite")
@@ -255,8 +261,8 @@ namespace NWebDav.Server.Helpers
             var endText = match.Groups["end"].Value;
             var range = new Range
             {
-                Start = !string.IsNullOrEmpty(startText) ? (long?)long.Parse(startText) : null,
-                End = !string.IsNullOrEmpty(endText) ? (long?)long.Parse(endText ) : null
+                Start = !string.IsNullOrEmpty(startText) ? long.Parse(startText) : null,
+                End = !string.IsNullOrEmpty(endText) ? long.Parse(endText ) : null
             };
 
             // Check if we also have an If-Range
@@ -282,7 +288,7 @@ namespace NWebDav.Server.Helpers
         /// </summary>
         /// <param name="request">HTTP request.</param>
         /// <returns>
-        /// XML document that represents the body content (or 
+        /// XML document that represents the body content (or
         /// <see langword="null"/> if no body content is specified).
         /// </returns>
 
@@ -324,7 +330,7 @@ namespace NWebDav.Server.Helpers
 #endif
 #if DEBUG
             // Dump the XML document to the logging
-            if (xDocument.Root != null && s_log.IsLogEnabled(NWebDav.Server.Logging.LogLevel.Debug))
+            if (xDocument.Root != null && s_log.IsLogEnabled(Logging.LogLevel.Debug))
             {
                 // Format the XML document as an in-memory text representation
                 using (var ms = new MemoryStream())
@@ -348,7 +354,7 @@ namespace NWebDav.Server.Helpers
 
                     // Log the XML text to the logging
                     var reader = new StreamReader(ms);
-                    s_log.Log(NWebDav.Server.Logging.LogLevel.Debug, () => reader.ReadToEnd());
+                    s_log.Log(Logging.LogLevel.Debug, () => reader.ReadToEnd());
                 }
             }
 #endif

@@ -47,12 +47,10 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
     //            Ok = m.Success,
     //            Result = new DownloadTokenResult
     //            {
-    //                Body = new DownloadTokenBody{Token = m.Groups["token"].Value } 
+    //                Body = new DownloadTokenBody{Token = m.Groups["token"].Value }
     //            }
     //        };
     //        return msg;
     //    }
     //}
-
-
 }

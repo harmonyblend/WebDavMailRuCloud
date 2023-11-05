@@ -10,7 +10,7 @@ namespace YaR.Clouds.SpecialCommands
     /// <summary>
     /// Обрабатывает командную строку и возвращает нужный объект команды
     /// </summary>
-    public class SpecialCommandFabric
+    public partial class SpecialCommandFabric
     {
         private static readonly List<SpecialCommandContainer> CommandContainers = new()
         {
@@ -156,10 +156,20 @@ namespace YaR.Clouds.SpecialCommands
             return commandContainer;
         }
 
+
+        private const string CommandRegexMask = @"((""((?<token>.*?)(?<!\\)"")|(?<token>[\S]+))(\s)*)";
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(CommandRegexMask)]
+        private static partial Regex CommandRegex();
+        private static readonly Regex s_commandRegex = CommandRegex();
+#else
+        private static readonly Regex s_commandRegex = new(CommandRegexMask, RegexOptions.Compiled);
+#endif
+
         private static List<string> ParseParameters(string paramString)
         {
-            var list = Regex
-                .Matches(paramString, @"((""((?<token>.*?)(?<!\\)"")|(?<token>[\S]+))(\s)*)")
+            var list = s_commandRegex
+                .Matches(paramString)
                 // ReSharper disable once RedundantEnumerableCastCall
                 .Cast<Match>()
                 .Select(m => m.Groups["token"].Value)

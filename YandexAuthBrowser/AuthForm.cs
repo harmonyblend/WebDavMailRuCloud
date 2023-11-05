@@ -6,6 +6,15 @@ namespace YandexAuthBrowser
 {
     public partial class AuthForm : Form
     {
+        [GeneratedRegex("\\\\?\"sk\\\\?\":\\\\?\"(?<sk>.*?)\\\\?\"")]
+        private static partial Regex SkRegex();
+
+        [GeneratedRegex("\\\\?\"yandexuid\\\\?\":\\\\?\"(?<uuid>.*?)\\\\?\"")]
+        private static partial Regex UuidRegex();
+
+        [GeneratedRegex("\\\\?\"login\\\\?\":\\\\?\"(?<login>.*?)\\\\?\"")]
+        private static partial Regex LoginRegex();
+
         private readonly string? DesiredLogin;
         private readonly BrowserAppResponse Response;
         private bool WeAreFinished;
@@ -97,9 +106,9 @@ namespace YandexAuthBrowser
                 var htmlEncoded = await WebView.CoreWebView2.ExecuteScriptAsync("document.body.outerHTML");
                 var html = JsonDocument.Parse(htmlEncoded).RootElement.ToString();
 
-                var matchSk = Regex.Match(html, @"\\?""sk\\?"":\\?""(?<sk>.*?)\\?""");
-                var matchUuid = Regex.Match(html, @"\\?""yandexuid\\?"":\\?""(?<uuid>.*?)\\?""");
-                var matchLogin = Regex.Match(html, @"\\?""login\\?"":\\?""(?<login>.*?)\\?""");
+                var matchSk = SkRegex().Match(html);
+                var matchUuid = UuidRegex().Match(html);
+                var matchLogin = LoginRegex().Match(html);
 
                 var sk = matchSk.Success ? matchSk.Groups["sk"].Value : string.Empty;
                 var uuid = matchUuid.Success ? matchUuid.Groups["uuid"].Value : string.Empty;

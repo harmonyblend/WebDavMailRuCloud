@@ -17,7 +17,7 @@ namespace NWebDav.Server.Props
     /// CLR type.
     /// </summary>
     /// <remarks>
-    /// A dedicated converter should be implemented to convert the property 
+    /// A dedicated converter should be implemented to convert the property
     /// value to/from an XML value. This class supports both synchronous and
     /// asynchronous accessor methods. To improve scalability, it is
     /// recommended to use the asynchronous methods for properties that require
@@ -55,7 +55,7 @@ namespace NWebDav.Server.Props
             /// compatible with the requesting WebDAV client.
             /// </remarks>
             object ToXml(IHttpContext httpContext, TType value);
-            
+
             /// <summary>
             /// Get the typed value of the specified XML representation.
             /// </summary>
@@ -102,7 +102,7 @@ namespace NWebDav.Server.Props
                 base.GetterAsync = (c, s) =>
                 {
                     var v = _getter(c, s);
-                     
+
                     //return Task.FromResult(Converter != null ? Converter.ToXml(c, v) : v);
                     return  new ValueTask<object>(Converter != null ? Converter.ToXml(c, v) : v);
                 };
@@ -168,19 +168,29 @@ namespace NWebDav.Server.Props
     /// <typeparam name="TEntry">
     /// Store item or collection to which this DAV property applies.
     /// </typeparam>
-    public abstract class DavRfc1123Date<TEntry> : DavTypedProperty<TEntry, DateTime> where TEntry : IStoreItem
+    public abstract partial class DavRfc1123Date<TEntry> : DavTypedProperty<TEntry, DateTime> where TEntry : IStoreItem
     {
+        private const string PropRegexMask =
+            @"(?<day>\d{1,2})(-|\s+)(?<month>\d\d)(-|\s)(?<year>\d\d\d\d)(-|\s)(?<hour>\d\d):(?<min>\d\d):?(?<sec>\d\d)?";
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(PropRegexMask)]
+        private static partial Regex PropRegex();
+        private static readonly Regex s_propRegex = PropRegex();
+#else
+        private static readonly Regex s_propRegex = new(PropRegexMask, RegexOptions.Compiled);
+#endif
+
         private class Rfc1123DateConverter : IConverter
         {
             public object ToXml(IHttpContext httpContext, DateTime value) => value.ToString("R", CultureInfo.InvariantCulture);
             public DateTime FromXml(IHttpContext httpContext, object value)
             {
-                bool parsed = DateTime.TryParse((string) value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date);
+                string stringValue = (string)value;
+                bool parsed = DateTime.TryParse(stringValue, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date);
                 if (!parsed)
                 {
                     // try to fix wrong datetime, for example, Far+NetBox send "0023, 23 11 2017 21:0223 'GMT'"
-                    var m = Regex.Match((string) value,
-                        @"(?<day>\d{1,2})(-|\s+)(?<month>\d\d)(-|\s)(?<year>\d\d\d\d)(-|\s)(?<hour>\d\d):(?<min>\d\d):?(?<sec>\d\d)?");
+                    var m = s_propRegex.Match(stringValue);
                     if (m.Success)
                     {
                         int year = int.Parse(m.Groups["year"].Value),
@@ -193,7 +203,7 @@ namespace NWebDav.Server.Props
                         date = new DateTime(year, month, day, hour, min, sec).ToLocalTime();
                     }
                     else
-                        throw new FormatException($"\"{(string)value}\" does not contain a valid string representation of a date and time.");
+                        throw new FormatException($"\"{stringValue}\" does not contain a valid string representation of a date and time.");
                 }
                 return date;
             }
@@ -226,7 +236,7 @@ namespace NWebDav.Server.Props
                 if (HasIso8601FractionBug(httpContext))
                 {
                     // We need to recreate the date again, because the Windows 7
-                    // WebDAV client cannot 
+                    // WebDAV client cannot
                     var dt = new DateTime(value.Year, value.Month, value.Day, value.Hour, value.Minute, value.Second, value.Millisecond, DateTimeKind.Utc);
                     return XmlConvert.ToString(dt, XmlDateTimeSerializationMode.Utc);
                 }

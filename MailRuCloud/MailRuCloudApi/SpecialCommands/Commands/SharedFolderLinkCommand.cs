@@ -8,7 +8,7 @@ using YaR.Clouds.Links;
 
 namespace YaR.Clouds.SpecialCommands.Commands
 {
-    public class SharedFolderLinkCommand : SpecialCommand
+    public partial class SharedFolderLinkCommand : SpecialCommand
     {
         public SharedFolderLinkCommand(Cloud cloud, string path, IList<string> parameters)
             : base(cloud, path, parameters)
@@ -17,9 +17,20 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         protected override MinMax<int> MinMaxParamsCount { get; } = new(1, 2);
 
+
+        private const string CommandRegexMask = @"(?snx-)\s* (?<url>(https://?cloud.mail.ru/public)?.*)/? \s*";
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(CommandRegexMask)]
+        private static partial Regex CommandRegex();
+        private static readonly Regex s_commandRegex = CommandRegex();
+#else
+        private static readonly Regex s_commandRegex = new(CommandRegexMask, RegexOptions.Compiled);
+#endif
+
+
         public override async Task<SpecialCommandResult> Execute()
         {
-            var m = Regex.Match(Parames[0], @"(?snx-)\s* (?<url>(https://?cloud.mail.ru/public)?.*)/? \s*");
+            var m = s_commandRegex.Match(Parames[0]);
 
             if (!m.Success) return SpecialCommandResult.Fail;
 

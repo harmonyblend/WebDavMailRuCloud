@@ -7,18 +7,37 @@ using YaR.Clouds.Base.Repos.MailRuCloud;
 
 namespace YaR.Clouds.SpecialCommands.Commands
 {
-    public class JoinCommand: SpecialCommand
+    public partial class JoinCommand: SpecialCommand
     {
-        public JoinCommand(Cloud cloud, string path, IList<string> parames): base(cloud, path, parames)
+        private const string CommandRegexMask = @"(?snx-) (https://?cloud.mail.ru/public)?(?<data>/\w*/?\w*)/?\s*";
+        private const string HashRegexMask = @"#(?<data>\w+)";
+        private const string SizeRegexMask = @"(?<data>\w+)";
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(CommandRegexMask)]
+        private static partial Regex CommandRegex();
+        private static readonly Regex s_commandRegex = CommandRegex();
+        [GeneratedRegex(HashRegexMask)]
+        private static partial Regex HashRegex();
+        private static readonly Regex s_hashRegex = HashRegex();
+        [GeneratedRegex(SizeRegexMask)]
+        private static partial Regex SizeRegex();
+        private static readonly Regex s_sizeRegex = SizeRegex();
+#else
+        private static readonly Regex s_commandRegex = new(CommandRegexMask, RegexOptions.Compiled);
+        private static readonly Regex s_hashRegex = new(HashRegexMask, RegexOptions.Compiled);
+        private static readonly Regex s_sizeRegex = new(SizeRegexMask, RegexOptions.Compiled);
+#endif
+
+        public JoinCommand(Cloud cloud, string path, IList<string> parameters): base(cloud, path, parameters)
         {
-            var m = Regex.Match(Parames[0], @"(?snx-) (https://?cloud.mail.ru/public)?(?<data>/\w*/?\w*)/?\s*");
+            var m = s_commandRegex.Match(Parames[0]);
 
             if (m.Success) //join by shared link
                 _func = () => ExecuteByLink(Path, m.Groups["data"].Value);
-            else 
+            else
             {
-                var mhash = Regex.Match(Parames[0], @"#(?<data>\w+)");
-                var msize = Regex.Match(Parames[1], @"(?<data>\w+)");
+                var mhash = s_hashRegex.Match(Parames[0]);
+                var msize = s_sizeRegex.Match(Parames[1]);
                 if (mhash.Success && msize.Success && Parames.Count == 3) //join by hash and size
                 {
                     _func = () => ExecuteByHash(Path, mhash.Groups["data"].Value, long.Parse(Parames[1]), Parames[2]);
@@ -32,8 +51,8 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public override Task<SpecialCommandResult> Execute()
         {
-            return _func != null 
-                ? _func() 
+            return _func != null
+                ? _func()
                 : Task.FromResult(new SpecialCommandResult(false, "Invalid parameters"));
         }
 

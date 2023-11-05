@@ -29,12 +29,12 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 .MakeRequestAsync(connectionLimiter);
             if (string.IsNullOrWhiteSpace(preAuthResult.Csrf))
                 throw new AuthenticationException($"{nameof(YadPreAuthRequest)} error parsing csrf");
-            if (string.IsNullOrWhiteSpace(preAuthResult.ProcessUUID))
+            if (string.IsNullOrWhiteSpace(preAuthResult.ProcessUuid))
                 throw new AuthenticationException($"{nameof(YadPreAuthRequest)} error parsing ProcessUUID");
 
-            Uuid = preAuthResult.ProcessUUID;
+            Uuid = preAuthResult.ProcessUuid;
 
-            var loginAuth = await new YadAuthLoginRequest(_settings, this, preAuthResult.Csrf, preAuthResult.ProcessUUID)
+            var loginAuth = await new YadAuthLoginRequest(_settings, this, preAuthResult.Csrf, preAuthResult.ProcessUuid)
                     .MakeRequestAsync(connectionLimiter);
             if (loginAuth.HasError)
                 throw new AuthenticationException($"{nameof(YadAuthLoginRequest)} error");
