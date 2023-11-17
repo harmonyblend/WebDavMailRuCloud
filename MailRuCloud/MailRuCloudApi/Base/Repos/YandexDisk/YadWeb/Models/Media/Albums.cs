@@ -19,7 +19,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
     internal class YadAlbumsRequestParams
     {
     }
- 
+
     internal class YadAlbumsRequestData
     {
         [JsonProperty("album_type")]
@@ -62,7 +62,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
         public bool IsBlocked { get; set; }
 
         [JsonProperty("fotki_album_id")]
-        public object FotkiAlbumId { get; set; }
+        public object PhotoAlbumId { get; set; }
 
         [JsonProperty("ctime")]
         public long Ctime { get; set; }
@@ -74,7 +74,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
         public bool IsDescSorting { get; set; }
 
         [JsonProperty("social_cover_stid")]
-        public string SocialCoverStid { get; set; }
+        public string SocialCoverStId { get; set; }
     }
 
     internal class Cover
@@ -137,7 +137,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
         public FSize[] Sizes { get; set; }
 
         [JsonProperty("mediatype")]
-        public string Mediatype { get; set; }
+        public string MediaType { get; set; }
 
         [JsonProperty("etime")]
         public long Etime { get; set; }
@@ -179,7 +179,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
     internal class FUser
     {
         [JsonProperty("username")]
-        public string Username { get; set; }
+        public string UserName { get; set; }
 
         [JsonProperty("public_name")]
         public string PublicName { get; set; }

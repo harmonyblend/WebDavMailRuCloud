@@ -213,7 +213,5 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
                 bytesToRead -= bytesRead;
             }
         }
-
-
     }
 }

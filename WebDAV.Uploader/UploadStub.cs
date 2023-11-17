@@ -36,7 +36,7 @@ namespace YaR.CloudMailRu.Client.Console
                 TwoFaHandler = null,
                 Protocol = Protocol.WebM1Bin
             };
-            var credentials = new Credentials(user, password);
+            var credentials = new Credentials(settings, user, password);
             var cloud = new Cloud(settings, credentials);
 
             using (var file = new StreamReader(listname))

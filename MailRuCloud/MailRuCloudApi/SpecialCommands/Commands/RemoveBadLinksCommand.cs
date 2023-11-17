@@ -5,7 +5,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
 {
     public class RemoveBadLinksCommand : SpecialCommand
     {
-        public RemoveBadLinksCommand(Cloud cloud, string path, IList<string> parames): base(cloud, path, parames)
+        public RemoveBadLinksCommand(Cloud cloud, string path, IList<string> parameters): base(cloud, path, parameters)
         {
         }
 
@@ -13,7 +13,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public override Task<SpecialCommandResult> Execute()
         {
-            Cloud.RemoveDeadLinks();
+            _cloud.RemoveDeadLinks();
             return Task.FromResult(SpecialCommandResult.Success);
         }
     }

@@ -12,14 +12,14 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         private readonly ConflictResolver _conflictResolver;
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="auth"></param>
         /// <param name="sourceFullPath"></param>
         /// <param name="destinationPath">(without item name)</param>
         /// <param name="conflictResolver"></param>
         /// <param name="settings"></param>
-        public CopyRequest(HttpCommonSettings settings, IAuth auth, string sourceFullPath, string destinationPath, ConflictResolver? conflictResolver = null) 
+        public CopyRequest(HttpCommonSettings settings, IAuth auth, string sourceFullPath, string destinationPath, ConflictResolver? conflictResolver = null)
             : base(settings, auth)
         {
             _sourceFullPath = sourceFullPath;
@@ -32,7 +32,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         protected override byte[] CreateHttpContent()
         {
             var data = Encoding.UTF8.GetBytes(string.Format("home={0}&api={1}&token={2}&email={3}&x-email={3}&conflict={4}&folder={5}",
-                Uri.EscapeDataString(_sourceFullPath), 2, Auth.AccessToken, Auth.Login, 
+                Uri.EscapeDataString(_sourceFullPath), 2, _auth.AccessToken, _auth.Login,
                 _conflictResolver,
                 Uri.EscapeDataString(_destinationPath)));
 

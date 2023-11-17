@@ -26,33 +26,33 @@ namespace YaR.Clouds.SpecialCommands.Commands
         public override async Task<SpecialCommandResult> Execute()
         {
             string path;
-            string param = Parames.Count == 0 
-                ? string.Empty 
-                : Parames[0].Replace("\\", WebDavPath.Separator);
-            SharedVideoResolution videoResolution = Parames.Count < 2 
-                ? Cloud.Settings.DefaultSharedVideoResolution
-                : EnumExtensions.ParseEnumMemberValue<SharedVideoResolution>(Parames[1]);
+            string param = _parameters.Count == 0
+                ? string.Empty
+                : _parameters[0].Replace("\\", WebDavPath.Separator);
+            SharedVideoResolution videoResolution = _parameters.Count < 2
+                ? _cloud.Settings.DefaultSharedVideoResolution
+                : EnumExtensions.ParseEnumMemberValue<SharedVideoResolution>(_parameters[1]);
 
-            if (Parames.Count == 0)
-                path = Path;
+            if (_parameters.Count == 0)
+                path = _path;
             else if (param.StartsWith(WebDavPath.Separator))
                 path = param;
             else
-                path = WebDavPath.Combine(Path, param);
+                path = WebDavPath.Combine(_path, param);
 
-            var entry = await Cloud.GetItemAsync(path);
+            var entry = await _cloud.GetItemAsync(path);
             if (entry is null)
                 return SpecialCommandResult.Fail;
 
             try
             {
-                await Cloud.Publish(entry, true, _generateDirectVideoLink, _makeM3UFile, videoResolution);
+                await _cloud.Publish(entry, true, _generateDirectVideoLink, _makeM3UFile, videoResolution);
             }
             catch (Exception e)
             {
                 return new SpecialCommandResult(false, e.Message);
             }
-            
+
             return SpecialCommandResult.Success;
         }
     }

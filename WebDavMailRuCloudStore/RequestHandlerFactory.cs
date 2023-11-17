@@ -5,10 +5,10 @@ using YaR.Clouds.WebDavStore.CustomHandlers;
 
 namespace YaR.Clouds.WebDavStore
 {
-    public class RequestHandlerFactory : IRequestHandlerFactory 
+    public class RequestHandlerFactory : IRequestHandlerFactory
     {
         private static readonly IDictionary<string, IRequestHandler> RequestHandlers = new Dictionary<string, IRequestHandler>
-        {   
+        {
             { "COPY",      new CopyHandler() },
             { "DELETE",    new DeleteHandler() },
             { "GET",       new GetAndHeadHandler() },
@@ -26,8 +26,8 @@ namespace YaR.Clouds.WebDavStore
 
         public IRequestHandler GetRequestHandler(IHttpContext httpContext)
         {
-            return !RequestHandlers.TryGetValue(httpContext.Request.HttpMethod, out var requestHandler) 
-                ? null 
+            return !RequestHandlers.TryGetValue(httpContext.Request.HttpMethod, out var requestHandler)
+                ? null
                 : requestHandler;
         }
 

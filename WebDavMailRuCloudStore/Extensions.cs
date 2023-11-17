@@ -21,11 +21,11 @@ namespace YaR.Clouds.WebDavStore
 
         public static Task<bool> Rename(this Cloud cloud, IStoreItem item, string destinationName)
         {
-            if (item == null) 
+            if (item == null)
                 throw new ArgumentNullException(nameof(item));
-            if (string.IsNullOrEmpty(destinationName)) 
+            if (string.IsNullOrEmpty(destinationName))
                 throw new ArgumentNullException(nameof(destinationName));
-            if (item is not ILocalStoreItem storeItem) 
+            if (item is not ILocalStoreItem storeItem)
                 throw new ArgumentException($"{nameof(ILocalStoreItem)} required.", nameof(item));
 
             return cloud.Rename(storeItem.EntryInfo, destinationName);
@@ -33,20 +33,20 @@ namespace YaR.Clouds.WebDavStore
 
         public static Task<bool> Move(this Cloud cloud, IStoreItem item, string destinationPath)
         {
-            if (item == null) 
+            if (item == null)
                 throw new ArgumentNullException(nameof(item));
-            if (string.IsNullOrEmpty(destinationPath)) 
+            if (string.IsNullOrEmpty(destinationPath))
                 throw new ArgumentNullException(nameof(destinationPath));
-            if (item is not ILocalStoreItem storeItem) 
+            if (item is not ILocalStoreItem storeItem)
                 throw new ArgumentException($"{nameof(ILocalStoreItem)} required.", nameof(item));
 
             return cloud.MoveAsync(storeItem.EntryInfo, destinationPath);
         }
         public static string GetFullPath(this IStoreItem item)
         {
-            if (item == null) 
+            if (item == null)
                 throw new ArgumentNullException(nameof(item));
-            if (item is not ILocalStoreItem storeItem) 
+            if (item is not ILocalStoreItem storeItem)
                 throw new ArgumentException($"{nameof(ILocalStoreItem)} required.", nameof(item));
 
             return storeItem.FullPath;

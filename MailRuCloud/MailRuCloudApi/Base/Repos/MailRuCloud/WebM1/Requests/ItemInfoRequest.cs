@@ -2,7 +2,7 @@
 using YaR.Clouds.Base.Requests;
 using YaR.Clouds.Base.Requests.Types;
 
-namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests	
+namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
 {
     class ItemInfoRequest : BaseRequestJson<FolderInfoResult>
     {
@@ -12,7 +12,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
         private readonly int _limit;
 
 
-        public ItemInfoRequest(HttpCommonSettings settings, IAuth auth, RemotePath path, int offset = 0, int limit = int.MaxValue) 
+        public ItemInfoRequest(HttpCommonSettings settings, IAuth auth, RemotePath path, int offset = 0, int limit = int.MaxValue)
             : base(settings, auth)
         {
             _isWebLink = path.IsLink;
@@ -34,8 +34,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
             get
             {
                 var uri = _isWebLink
-                    ? $"/api/m1/file?access_token={Auth.AccessToken}&weblink={_path}&offset={_offset}&limit={_limit}"
-                    : $"/api/m1/file?access_token={Auth.AccessToken}&home={Uri.EscapeDataString(_path)}&offset={_offset}&limit={_limit}";
+                    ? $"/api/m1/file?access_token={_auth.AccessToken}&weblink={_path}&offset={_offset}&limit={_limit}"
+                    : $"/api/m1/file?access_token={_auth.AccessToken}&home={Uri.EscapeDataString(_path)}&offset={_offset}&limit={_limit}";
                 return uri;
             }
         }

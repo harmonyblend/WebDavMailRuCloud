@@ -48,7 +48,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             get
             {
-                if (null != _hashSha256 && null != _hashMd5) 
+                if (null != _hashSha256 && null != _hashMd5)
                     return new FileHashYad(_hashSha256, _hashMd5);
 
                 AppendFinalBuffer();

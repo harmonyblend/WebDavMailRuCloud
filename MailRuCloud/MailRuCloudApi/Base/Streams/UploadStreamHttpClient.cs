@@ -20,7 +20,7 @@ namespace YaR.Clouds.Base.Streams
         {
             _cloud = cloud;
             _file = new File(destinationPath, size);
-            _cloudFileHasher = Repo.GetHasher();
+            _cloudFileHasher = _cloud.RequestRepo.GetHasher();
 
             Initialize();
         }
@@ -41,9 +41,9 @@ namespace YaR.Clouds.Base.Streams
         {
             try
             {
-                if (Repo.SupportsAddSmallFileByHash && _file.OriginalSize <= _cloudFileHasher.Length) // do not send upload request if file content fits to hash
+                if (_cloud.RequestRepo.SupportsAddSmallFileByHash && _file.OriginalSize <= _cloudFileHasher.Length) // do not send upload request if file content fits to hash
                     UploadSmall(_ringBuffer);
-                else if (Repo.SupportsDeduplicate && _cloud.Settings.UseDeduplicate) // && !_file.ServiceInfo.IsCrypted) // && !_file.ServiceInfo.SplitInfo.IsPart)
+                else if (_cloud.RequestRepo.SupportsDeduplicate && _cloud.Settings.UseDeduplicate) // && !_file.ServiceInfo.IsCrypted) // && !_file.ServiceInfo.SplitInfo.IsPart)
                     UploadCache(_ringBuffer);
                 else
                     UploadFull(_ringBuffer);
@@ -76,7 +76,7 @@ namespace YaR.Clouds.Base.Streams
             if (cache.Process())
             {
                 Logger.Debug($"Uploading [{cache.DataCacheName}] {_file.FullPath}");
-                
+
                 OnFileStreamSent();
 
                 _file.Hash = _cloudFileHasher.Hash;
@@ -115,8 +115,7 @@ namespace YaR.Clouds.Base.Streams
             });
 
             var client = HttpClientFabric.Instance[_cloud];
-            var uploadFileResult = Repo.DoUpload(client, pushContent, _file).Result;
-
+            var uploadFileResult = _cloud.RequestRepo.DoUpload(client, pushContent, _file).Result;
 
             if (uploadFileResult.HttpStatusCode != HttpStatusCode.Created &&
                 uploadFileResult.HttpStatusCode != HttpStatusCode.OK)
@@ -145,9 +144,13 @@ namespace YaR.Clouds.Base.Streams
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            if (CheckHashes || 
-                (_cloudFileHasher != null && Repo.SupportsAddSmallFileByHash && _file.OriginalSize <= _cloudFileHasher.Length) )
+            if (CheckHashes ||
+                (_cloudFileHasher != null &&
+                 _cloud.RequestRepo.SupportsAddSmallFileByHash &&
+                 _file.OriginalSize <= _cloudFileHasher.Length))
+            {
                 _cloudFileHasher?.Append(buffer, offset, count);
+            }
 
             _ringBuffer.Write(buffer, offset, count);
         }
@@ -166,7 +169,7 @@ namespace YaR.Clouds.Base.Streams
 
 
             }
-            finally 
+            finally
             {
                 _ringBuffer?.Dispose();
                 _cloudFileHasher?.Dispose();
@@ -176,7 +179,6 @@ namespace YaR.Clouds.Base.Streams
         private readonly Cloud _cloud;
         private readonly File _file;
 
-        private IRequestRepo Repo => _cloud.RequestRepo;
         private readonly ICloudHasher _cloudFileHasher;
         private Task _uploadTask;
         private readonly RingBufferedStream _ringBuffer = new(65536);

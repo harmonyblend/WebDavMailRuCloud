@@ -21,7 +21,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         {
             foreach (var pair in base.ToKvp(index))
                 yield return pair;
-            
+
             yield return new KeyValuePair<string, string>($"src.{index}", WebDavPath.Combine("/disk", Source));
             yield return new KeyValuePair<string, string>($"dst.{index}", WebDavPath.Combine("/disk", Destination));
             yield return new KeyValuePair<string, string>($"force.{index}", Force ? "1" : "0");
@@ -34,7 +34,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         public long AtVersion { get; set; }
 
         [JsonProperty("oid")]
-        public string Oid { get; set; }
+        public string OpId { get; set; }
 
         [JsonProperty("type")]
         public string Type { get; set; }

@@ -16,8 +16,8 @@ class HttpClientFabric
             var cli = _lockDict.GetOrAdd(cloud.Credentials, new HttpClient(new HttpClientHandler
             {
                 UseProxy = true,
-                Proxy = cloud.RequestRepo.HttpSettings.Proxy,
-                CookieContainer = cloud.RequestRepo.Authenticator.Cookies,
+                Proxy = cloud.Settings.Proxy,
+                CookieContainer = cloud.RequestRepo.Auth.Cookies,
                 UseCookies = true,
                 AllowAutoRedirect = true,
                 MaxConnectionsPerServer = int.MaxValue

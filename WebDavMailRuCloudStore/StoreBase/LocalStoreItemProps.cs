@@ -139,6 +139,6 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         }
 
         public IEnumerable<DavProperty<T>> Props => _props;
-        private readonly DavProperty<T>[]  _props;
+        private readonly DavProperty<T>[] _props;
     }
 }

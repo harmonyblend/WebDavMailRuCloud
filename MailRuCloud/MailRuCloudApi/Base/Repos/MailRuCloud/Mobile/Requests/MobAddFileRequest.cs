@@ -15,7 +15,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
         private readonly ConflictResolver _conflictResolver;
         private readonly DateTime _dateTime;
 
-        public MobAddFileRequest(HttpCommonSettings settings, IAuth auth, string metaServer, string fullPath, byte[] hash, long size, DateTime? dateTime, ConflictResolver? conflict) 
+        public MobAddFileRequest(HttpCommonSettings settings, IAuth auth, string metaServer, string fullPath, byte[] hash, long size, DateTime? dateTime, ConflictResolver? conflict)
             : base(settings, auth, metaServer)
         {
             _fullPath = fullPath;
@@ -25,7 +25,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
             _dateTime = (dateTime ?? DateTime.Now).ToUniversalTime();
         }
 
-        public MobAddFileRequest(HttpCommonSettings settings, IAuth auth, string metaServer, string fullPath, string hash, long size, DateTime? dateTime, ConflictResolver? conflict) 
+        public MobAddFileRequest(HttpCommonSettings settings, IAuth auth, string metaServer, string fullPath, string hash, long size, DateTime? dateTime, ConflictResolver? conflict)
             : this(settings, auth, metaServer, fullPath, hash?.HexStringToByteArray(), size, dateTime, conflict)
         {
         }

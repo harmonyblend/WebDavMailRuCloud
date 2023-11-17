@@ -25,5 +25,5 @@ public class ActiveOperation
     /// <summary>
     /// Идентификатор операции, который можно передавать параметром в метод <see cref="YadWebRequestRepo.WaitForOperation"/>.
     /// </summary>
-    public string Oid { get; set; }
+    public string OpId { get; set; }
 }

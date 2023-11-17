@@ -19,7 +19,7 @@ namespace YaR.Clouds.Extensions
                 if (fi.GetCustomAttributes(typeof (EnumMemberAttribute), false) is EnumMemberAttribute[] { Length: > 0 } attrs)
                     enumStringValue = attrs[0].Value;
 
-                if (string.Compare(enumStringValue, stringValue, ignoreCase) != 0) 
+                if (string.Compare(enumStringValue, stringValue, ignoreCase) != 0)
                     continue;
 
                 output = (T)Enum.Parse(type, fi.Name);
@@ -37,8 +37,8 @@ namespace YaR.Clouds.Extensions
                 .OfType<EnumMemberAttribute>().
                 FirstOrDefault();
 
-            return attr == null 
-                ? @enum.ToString() 
+            return attr == null
+                ? @enum.ToString()
                 : attr.Value;
         }
     }

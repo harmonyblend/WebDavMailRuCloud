@@ -1,51 +1,13 @@
 ﻿using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
+namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
 {
     internal class YadActiveOperationsPostModel : YadPostModel
     {
         public YadActiveOperationsPostModel()
         {
-                /*
-                 * Когда не известны oid операций, их можно получить
-                 * https://disk.yandex.ru/models/?_m=operationsActive
-                 * _model.0: operationsActive
-                 * idClient: 123-it's-idClient-456
-                 * sk: 123-it's-sk-string-456
-                 * 
-                 * Возвращается
-                 * "model": "operationsActive",
-                 * "params": {},
-                 * "data": [] - data вместо одного элемента - массив таких элементов:
-                    {
-                    "ycrid": "web-1698338869267786-3663447218171532181-plgbyubizuztjk4e",
-                    "ctime": 1698338869,
-                    "data": {
-                        "force": 0,
-                        "target": "938070248:/disk/destination-folder",
-                        "callback": "",
-                        "connection_id": "9380702481698301100557",
-                        "skip_check_rights": false,
-                        "source_resource_id": "938070248:4ac64fed23b013a0e4078dc84e3f7f6256b7b41e0a299c1290c45b3d3dfa2b6c",
-                        "source": "938070248:/disk/source-folder",
-                        "file_id": "4ac64fed23b013a0e4078dc84e3f7f6256b7b41e0a299c1290c45b3d3dfa2b6c",
-                        "filedata": {},
-                        "stages": {},
-                        "at_version": 1698338147176824
-                    },
-                    "dtime": 1698338869,
-                    "subtype": "disk_disk",
-                    "state": 1,
-                    "mtime": 1698338869,
-                    "md5": "",
-                    "type": "move",
-                    "id": "f95c495aba8e5b768d111ec5a5ae8e547f871de2b49d8f31520b03fc451d1021",
-                    "uid": "123-it's-uid-456"
-                    }
-                 */
-
-                Name = "operationsActive";
+            Name = "operationsActive";
         }
 
         public override IEnumerable<KeyValuePair<string, string>> ToKvp(int index)
@@ -54,7 +16,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
                 yield return pair;
         }
     }
-
 
     internal class YadActiveOperationsData : YadModelDataBase
     {
@@ -74,7 +35,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
         /// Это идентификатор для передачи параметром в метод <see cref="YadWebRequestRepo.WaitForOperation"/>
         /// </summary>
         [JsonProperty("id")]
-        public string Oid { get; set; }
+        public string OpId { get; set; }
 
         /// <summary>
         /// ID пользователя, запустившего операцию
@@ -193,6 +154,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWebV2.Models
         /// <summary>
         /// Идентификатор операции, который можно передавать параметром в метод <see cref="YadWebRequestRepo.WaitForOperation"/>.
         /// </summary>
-        public string Oid { get; set; }
+        public string OpId { get; set; }
     }
 }

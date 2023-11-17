@@ -9,17 +9,17 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
     {
         private readonly string _fullPath;
 
-        public PublishRequest(HttpCommonSettings settings, IAuth auth, string fullPath) 
+        public PublishRequest(HttpCommonSettings settings, IAuth auth, string fullPath)
             : base(settings, auth)
         {
             _fullPath = fullPath;
         }
 
-        protected override string RelationalUri => $"/api/m1/file/publish?access_token={Auth.AccessToken}";
+        protected override string RelationalUri => $"/api/m1/file/publish?access_token={_auth.AccessToken}";
 
         protected override byte[] CreateHttpContent()
         {
-            var data = $"home={Uri.EscapeDataString(_fullPath)}&email={Auth.Login}&x-email={Auth.Login}";
+            var data = $"home={Uri.EscapeDataString(_fullPath)}&email={_auth.Login}&x-email={_auth.Login}";
             return Encoding.UTF8.GetBytes(data);
         }
     }

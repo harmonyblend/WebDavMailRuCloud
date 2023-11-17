@@ -13,7 +13,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         {
             get
             {
-                var uri = $"/api/v2/tokens/download?token={Auth.AccessToken}";
+                var uri = $"/api/v2/tokens/download?token={_auth.AccessToken}";
                 return uri;
             }
         }

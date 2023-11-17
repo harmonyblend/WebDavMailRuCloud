@@ -26,7 +26,7 @@ namespace YaR.Clouds.Base
 
         public static FilenameServiceInfo Parse(string filename)
         {
-            
+
 
             static int HexToInt(char h)
             {
@@ -40,7 +40,7 @@ namespace YaR.Clouds.Base
             }
 
             static bool IsDigit(char c) => c is >= '0' and <= '9';
-            
+
 
             var res = new FilenameServiceInfo { CleanName = filename, SplitInfo = new FileSplitInfo { IsHeader = true } };
 
@@ -59,14 +59,14 @@ namespace YaR.Clouds.Base
             int parselen = fns.Length - pos;
 
             int align = parselen == 4 ? HexToInt(fns[pos + 3]) : -1;
-            bool hasDigits = (parselen == 3 || (parselen == 4 && align > -1)) 
+            bool hasDigits = (parselen == 3 || (parselen == 4 && align > -1))
                              && IsDigit(fns[pos]) && IsDigit(fns[pos + 1]) && IsDigit(fns[pos + 2]);
 
-            if (!hasDigits) 
+            if (!hasDigits)
                 return res;
 
             res.CleanName = fns[..startpos].ToString();
-            
+
             res.SplitInfo.IsHeader = false;
             #if NET48
                 res.SplitInfo.PartNumber = int.Parse(fns.Slice(pos, 3).ToString());

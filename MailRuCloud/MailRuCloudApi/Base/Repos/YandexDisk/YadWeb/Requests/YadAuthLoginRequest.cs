@@ -8,14 +8,14 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 {
     class YadAuthLoginRequest : BaseRequestJson<YadAuthLoginRequestResult>
     {
-        private readonly IAuth _auth;
+        //private readonly IAuth _auth;
         private readonly string _csrf;
         private readonly string _uuid;
 
-        public YadAuthLoginRequest(HttpCommonSettings settings, IAuth auth, string csrf, string uuid) 
+        public YadAuthLoginRequest(HttpCommonSettings settings, IAuth auth, string csrf, string uuid)
             : base(settings, auth)
         {
-            _auth = auth;
+            //_auth = auth;
             _csrf = csrf;
             _uuid = uuid;
         }
@@ -49,7 +49,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
         }
     }
 
-    
+
 
     class YadAuthLoginRequestResult
     {

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.IO;
 using System.Net;
 using System.Threading;
@@ -30,7 +29,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
         };
 
         public MobileRequestRepo(CloudSettings settings, IWebProxy proxy, IAuth auth, int listDepth)
-            : base(new Credentials(auth.Login, auth.Password))
+            : base(new Credentials(settings, auth.Login, auth.Password))
         {
             _connectionLimiter = new SemaphoreSlim(settings.MaxConnectionCount);
             _listDepth = listDepth;
@@ -38,7 +37,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
             HttpSettings.CloudSettings = settings;
             HttpSettings.Proxy = proxy;
 
-            Authenticator = auth;
+            Auth = auth;
 
             _metaServer = new Cached<ServerRequestResult>(_ =>
                 {
@@ -73,7 +72,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
 		//private const int DownloadServerExpiresSec = 20 * 60;
 
 
-        
+
 
         //public HttpWebRequest UploadRequest(File file, UploadMultipartBoundary boundary)
         //{
@@ -146,7 +145,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
             if (path.IsLink)
                 throw new NotImplementedException(nameof(FolderInfo));
 
-            var req = new ListRequest(HttpSettings, Authenticator, _metaServer.Value.Url, path.Path, _listDepth);
+            var req = new ListRequest(HttpSettings, Auth, _metaServer.Value.Url, path.Path, _listDepth);
             var res = await req.MakeRequestAsync(_connectionLimiter);
 
             switch (res.Item)
@@ -206,7 +205,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
 
         public async Task<AccountInfoResult> AccountInfo()
         {
-            var req = await new AccountInfoRequest(HttpSettings, Authenticator).MakeRequestAsync(_connectionLimiter);
+            var req = await new AccountInfoRequest(HttpSettings, Auth).MakeRequestAsync(_connectionLimiter);
             var res = req.ToAccountInfo();
             return res;
         }
@@ -230,7 +229,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
         {
             string target = WebDavPath.Combine(WebDavPath.Parent(fullPath), newName);
 
-            await new MoveRequest(HttpSettings, Authenticator, _metaServer.Value.Url, fullPath, target)
+            await new MoveRequest(HttpSettings, Auth, _metaServer.Value.Url, fullPath, target)
                 .MakeRequestAsync(_connectionLimiter);
             var res = new RenameResult { IsSuccess = true };
             return res;
@@ -253,20 +252,20 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
 
         public async Task<CreateFolderResult> CreateFolder(string path)
         {
-            var folerRequest = await new CreateFolderRequest(HttpSettings, Authenticator, _metaServer.Value.Url, path)
+            var folerRequest = await new CreateFolderRequest(HttpSettings, Auth, _metaServer.Value.Url, path)
                 .MakeRequestAsync(_connectionLimiter);
             return folerRequest.ToCreateFolderResult();
         }
 
         public async Task<AddFileResult> AddFile(string fileFullPath, IFileHash fileHash, FileSize fileSize, DateTime dateTime, ConflictResolver? conflictResolver)
         {
-            var res = await new MobAddFileRequest(HttpSettings, Authenticator, _metaServer.Value.Url,
+            var res = await new MobAddFileRequest(HttpSettings, Auth, _metaServer.Value.Url,
                     fileFullPath, fileHash.Hash.Value, fileSize, dateTime, conflictResolver)
                 .MakeRequestAsync(_connectionLimiter);
 
             return res.ToAddFileResult();
         }
 
-        public async Task<CheckUpInfo> ActiveOperationsAsync() => await Task.FromResult<CheckUpInfo>(null);
+        public async Task<CheckUpInfo> DetectOutsideChanges() => await Task.FromResult<CheckUpInfo>(null);
     }
 }

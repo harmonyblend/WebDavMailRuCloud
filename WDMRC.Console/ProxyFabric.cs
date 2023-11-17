@@ -14,7 +14,7 @@ namespace YaR.Clouds.Console
 #if NET48
                 return WebRequest.DefaultWebProxy;
 #else
-                return HttpClient.DefaultProxy; 
+                return HttpClient.DefaultProxy;
 #endif
 
 
@@ -28,7 +28,7 @@ namespace YaR.Clouds.Console
             int port = int.Parse(match.Groups["port"].Value);
 
             var proxy = type == "socks"
-                ? string.IsNullOrEmpty(proxyUser) 
+                ? string.IsNullOrEmpty(proxyUser)
                     ? (IWebProxy)new HttpToSocks5Proxy(address, port)
                     : new HttpToSocks5Proxy(address, port, proxyUser, proxyPassword)
                 : new WebProxy(new Uri(proxyAddress))

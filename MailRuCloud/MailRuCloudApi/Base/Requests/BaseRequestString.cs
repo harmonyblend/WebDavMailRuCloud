@@ -5,7 +5,7 @@ namespace YaR.Clouds.Base.Requests
 {
     internal abstract class BaseRequestString : BaseRequestString<string>
     {
-        protected BaseRequestString(HttpCommonSettings settings, IAuth auth) 
+        protected BaseRequestString(HttpCommonSettings settings, IAuth auth)
             : base(settings, auth)
         {
         }

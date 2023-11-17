@@ -51,7 +51,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
         {
             get
             {
-                if (null != _hash) 
+                if (null != _hash)
                     return new FileHashMrc(_hash);
 
                 if (_length <= 20)

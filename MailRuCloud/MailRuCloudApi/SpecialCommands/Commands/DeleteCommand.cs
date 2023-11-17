@@ -16,20 +16,20 @@ namespace YaR.Clouds.SpecialCommands.Commands
         public override async Task<SpecialCommandResult> Execute()
         {
             string path;
-            string param = Parames.Count == 0 ? string.Empty : Parames[0].Replace("\\", WebDavPath.Separator);
+            string param = _parameters.Count == 0 ? string.Empty : _parameters[0].Replace("\\", WebDavPath.Separator);
 
-            if (Parames.Count == 0)
-                path = Path;
+            if (_parameters.Count == 0)
+                path = _path;
             else if (param.StartsWith(WebDavPath.Separator))
                 path = param;
             else
-                path = WebDavPath.Combine(Path, param);
+                path = WebDavPath.Combine(_path, param);
 
-            var entry = await Cloud.GetItemAsync(path);
+            var entry = await _cloud.GetItemAsync(path);
             if (entry is null)
                 return SpecialCommandResult.Fail;
 
-            var res = await Cloud.Remove(entry);
+            var res = await _cloud.Remove(entry);
             return new SpecialCommandResult(res);
         }
     }

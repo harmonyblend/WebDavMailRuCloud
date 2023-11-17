@@ -54,7 +54,7 @@ namespace YaR.Clouds.Base
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj)) 
+            if (ReferenceEquals(null, obj))
                 return false;
 
             return obj.GetType() == GetType() && Equals((FileSize)obj);

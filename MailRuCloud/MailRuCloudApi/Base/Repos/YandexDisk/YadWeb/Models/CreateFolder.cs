@@ -19,7 +19,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         {
             foreach (var pair in base.ToKvp(index))
                 yield return pair;
-            
+
             yield return new KeyValuePair<string, string>($"id.{index}", WebDavPath.Combine("/disk", Path));
             yield return new KeyValuePair<string, string>($"force.{index}", Force ? "1" : "0");
         }

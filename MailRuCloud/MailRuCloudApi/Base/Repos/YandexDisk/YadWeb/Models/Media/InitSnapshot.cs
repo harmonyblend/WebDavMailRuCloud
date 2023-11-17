@@ -19,7 +19,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
     internal class YadInitSnapshotRequestData : YadModelDataBase
     {
         [JsonProperty("photoslice_id")]
-        public string PhotosliceId { get; set; }
+        public string PhotoSliceId { get; set; }
 
         [JsonProperty("href")]
         public string Href { get; set; }

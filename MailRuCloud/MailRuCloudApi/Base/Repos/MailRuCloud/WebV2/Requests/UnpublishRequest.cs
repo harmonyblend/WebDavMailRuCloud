@@ -19,7 +19,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         protected override byte[] CreateHttpContent()
         {
             var data = string.Format("weblink={0}&api={1}&token={2}&email={3}&x-email={3}", Uri.EscapeDataString(_publicLink),
-                2, Auth.AccessToken, Auth.Login);
+                2, _auth.AccessToken, _auth.Login);
             return Encoding.UTF8.GetBytes(data);
         }
     }

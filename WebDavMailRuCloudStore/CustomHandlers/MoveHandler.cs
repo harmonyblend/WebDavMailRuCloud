@@ -109,7 +109,7 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
         {
             // Obtain the destination
             string destinationHeader = request.GetHeaderValue("Destination");
-            
+
             if (destinationHeader == null)
                 return null;
 

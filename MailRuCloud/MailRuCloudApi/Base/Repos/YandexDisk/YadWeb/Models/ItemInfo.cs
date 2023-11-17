@@ -67,13 +67,13 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         public string Mimetype { get; set; }
 
         [JsonProperty("drweb")]
-        public long Drweb { get; set; }
+        public long DrWeb { get; set; }
 
         [JsonProperty("resource_id")]
         public string ResourceId { get; set; }
 
         [JsonProperty("mediatype")]
-        public string Mediatype { get; set; }
+        public string MediaType { get; set; }
 
         [JsonProperty("file_id")]
         public string FileId { get; set; }

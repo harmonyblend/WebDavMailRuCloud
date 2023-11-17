@@ -75,10 +75,10 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
         public IEnumerable<ActiveLock> GetActiveLockInfo(IStoreItem item)
         {
-            return EmptyActiveLockEntry; 
+            return EmptyActiveLockEntry;
         }
         private static readonly ActiveLock[] EmptyActiveLockEntry = Array.Empty<ActiveLock>();
-        
+
 
         public IEnumerable<LockEntry> GetSupportedLocks(IStoreItem item)
         {

@@ -41,7 +41,7 @@ namespace YaR.Clouds.Base
         }
 
         /// <summary>
-        /// makes copy of this file with new path
+        /// Makes copy of this file with new path
         /// </summary>
         /// <param name="newFullPath"></param>
         /// <returns></returns>
@@ -65,25 +65,6 @@ namespace YaR.Clouds.Base
 
             return folder;
         }
-
-        //public IEnumerable<IEntry> Entries
-        //{
-        //    get
-        //    {
-        //        foreach (var file in Files.Values)
-        //            yield return file;
-        //        foreach (var folder in Folders.Values)
-        //            yield return folder;
-        //    }
-        //}
-
-        // Больше никакой вложенной информации
-        //public ConcurrentDictionary<string /* FullPath of File */, File> Files { get; set; }
-        //    = new(StringComparer.InvariantCultureIgnoreCase);
-
-        //public ConcurrentDictionary<string /* FullPath of Folder */, Folder> Folders { get; set; }
-        //    = new(StringComparer.InvariantCultureIgnoreCase);
-
 
         /// <summary>
         /// Gets folder name.
@@ -116,7 +97,7 @@ namespace YaR.Clouds.Base
         public IEnumerable<PublicLinkInfo> GetPublicLinks(Cloud cloud)
         {
             return PublicLinks.IsEmpty
-                ? cloud.GetSharedLinks(FullPath) 
+                ? cloud.GetSharedLinks(FullPath)
                 : PublicLinks.Values;
         }
 
@@ -148,28 +129,5 @@ namespace YaR.Clouds.Base
                 info.Items.Add(new PublishInfoItem { Path = FullPath, Urls = PublicLinks.Select(pli => pli.Value.Uri).ToList() });
             return info;
         }
-
-        //public List<KeyValuePair<string, IEntry>> GetLinearChildren()
-        //{
-
-        //}
-        //public void Forget(object whomKey)
-        //{
-        //    string key = whomKey?.ToString();
-
-        //    if (string.IsNullOrEmpty(key))
-        //        return;
-
-        //    // Удалять начинаем с директорий, т.к. их обычно меньше,
-        //    // а значит поиск должен завершиться в среднем быстрее.
-
-        //    if (!Folders.TryRemove(key, out _))
-        //    {
-        //        // Если по ключу в виде полного пути не удалось удалить директорию,
-        //        // пытаемся по этому же ключу удалить файл, если он есть.
-        //        // Если ничего не удалилось, значит и удалять нечего.
-        //        _ = Files.TryRemove( key, out _);
-        //    }
-        //}
     }
 }

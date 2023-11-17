@@ -8,7 +8,7 @@ using NWebDav.Server.Stores;
 
 namespace YaR.Clouds.WebDavStore.CustomProperties
 {
-    public class DavSrtfileattributes<TEntry> : DavTypedProperty<TEntry, FileAttributes> where TEntry : IStoreItem
+    public class DavSrtFileAttributes<TEntry> : DavTypedProperty<TEntry, FileAttributes> where TEntry : IStoreItem
     {
         private class FileAttributesConverter : IConverter
         {

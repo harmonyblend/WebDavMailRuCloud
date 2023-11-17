@@ -66,5 +66,4 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
         public string HtmlResponse { get; set; }
     }
-
 }

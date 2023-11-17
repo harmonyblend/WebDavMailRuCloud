@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace YaR.Clouds.Common;
 
-public class EntryCache
+public class EntryCache : IDisposable
 {
     public enum GetState
     {
@@ -37,8 +37,8 @@ public class EntryCache
 
     private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(EntryCache));
 
-    private static readonly TimeSpan _minCleanUpInterval = new TimeSpan(0, 0, 10 /* секунды */ );
-    private static readonly TimeSpan _maxCleanUpInterval = new TimeSpan(0, 10 /* минуты */, 0);
+    //private static readonly TimeSpan _minCleanUpInterval = new TimeSpan(0, 0, 10 /* секунды */ );
+    //private static readonly TimeSpan _maxCleanUpInterval = new TimeSpan(0, 10 /* минуты */, 0);
 
     // По умолчанию очистка кеша от устаревших записей производится каждые 30 секунд
     private TimeSpan _cleanUpPeriod = TimeSpan.FromSeconds(30);
@@ -47,7 +47,7 @@ public class EntryCache
 
     public bool IsCacheEnabled { get; private set; }
 
-    private readonly Timer _cleanTimer;
+    private readonly System.Timers.Timer _cleanTimer;
 
     private readonly ConcurrentDictionary<string /* full path */, CacheItem> _root =
         new(StringComparer.InvariantCultureIgnoreCase);
@@ -56,7 +56,7 @@ public class EntryCache
 
     public delegate Task<CheckUpInfo> CheckOperations();
     private readonly CheckOperations _activeOperationsAsync;
-    private readonly Timer _checkActiveOperationsTimer;
+    private readonly System.Timers.Timer _checkActiveOperationsTimer;
     // Проверка активных операций на сервере и внешних изменений в облаке не через сервис
     // производится каждые 24 секунды, число не кратное очистке кеша, чтобы не пересекались
     // алгоритмы.
@@ -95,7 +95,7 @@ public class EntryCache
                         : AllDescendantsInCache
                             ? "<<FOLDER with DESCENDANTS>>"
                             : "<<JUST folder entry>>")}"
-            + $", Since {CreationTime:HH:mm:ss} {Entry.FullPath}";
+            + $", Since {CreationTime:HH:mm:ss} {Entry?.FullPath}";
     }
 
     public EntryCache(TimeSpan expirePeriod, CheckOperations activeOperationsAsync)
@@ -110,16 +110,54 @@ public class EntryCache
 
         if (IsCacheEnabled)
         {
-            _cleanTimer = new Timer(_ => RemoveExpired(), null, _cleanUpPeriod, _cleanUpPeriod);
+            _cleanTimer = new System.Timers.Timer()
+            {
+                Interval = _cleanUpPeriod.TotalMilliseconds,
+                Enabled = true,
+                AutoReset = true
+            };
+            _cleanTimer.Elapsed += RemoveExpired;
 
             if (_activeOperationsAsync is not null && expirePeriod.TotalMinutes >= 1)
             {
                 // Если кеш достаточно длительный, делаются регулярные
                 // проверки на изменения в облаке
-                _checkActiveOperationsTimer = new Timer(_ => CheckActiveOps(), null, _opCheckPeriod, _opCheckPeriod);
+                _checkActiveOperationsTimer = new System.Timers.Timer()
+                {
+                    Interval = _opCheckPeriod.TotalMilliseconds,
+                    Enabled = true,
+                    AutoReset = true
+                };
+                _checkActiveOperationsTimer.Elapsed += CheckActiveOps;
             }
         }
     }
+
+    #region IDisposable Support
+    private bool _disposedValue;
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposedValue) return;
+        if (disposing)
+        {
+            _checkActiveOperationsTimer?.Stop();
+            _checkActiveOperationsTimer?.Dispose();
+            _cleanTimer?.Stop();
+            _cleanTimer?.Dispose();
+            Clear();
+            _locker?.Dispose();
+
+            Logger.Debug("EntryCache disposed");
+        }
+        _disposedValue = true;
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+    }
+    #endregion
 
     //public TimeSpan CleanUpPeriod
     //{
@@ -142,9 +180,10 @@ public class EntryCache
     //    }
     //}
 
-    public int RemoveExpired()
+    private void RemoveExpired(object sender, System.Timers.ElapsedEventArgs e)
     {
-        if (_root.IsEmpty) return 0;
+        if (_root.IsEmpty)
+            return;
 
         var watch = Stopwatch.StartNew();
 
@@ -189,7 +228,7 @@ public class EntryCache
             Logger.Debug($"Items cache clean: removed {removedCount} expired " +
                 $"items, {partiallyExpiredCount} marked partially expired ({watch.ElapsedMilliseconds} ms)");
 
-        return removedCount;
+        return;
     }
 
     public void ResetCheck()
@@ -208,7 +247,7 @@ public class EntryCache
         }
     }
 
-    public async void CheckActiveOps()
+    private async void CheckActiveOps(object sender, System.Timers.ElapsedEventArgs e)
     {
         CheckUpInfo info = await _activeOperationsAsync();
         if (info is null)
@@ -585,7 +624,7 @@ public class EntryCache
                      * Содержимое папки берется не из этого списка, а собирается из кеша по path всех entry.
                      * В кеше у папок Descendants всегда = ImmutableList<IEntry>.Empty
                      */
-                    if (removed)
+                    if (removed && cachedItem?.Entry is not null)
                     {
                         if (cachedItem.Entry.IsFile)
                         {

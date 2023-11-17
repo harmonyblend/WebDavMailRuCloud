@@ -4,7 +4,7 @@
     {
         public string FullPath { get; }
         public CloudFolderType Type { get; }
-            
+
         private TreeId _treeId;
 
         public FsFolder Parent { get; }

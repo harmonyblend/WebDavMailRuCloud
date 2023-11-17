@@ -5,20 +5,20 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
 {
     internal class YadOperationStatusPostModel : YadPostModel
     {
-        public YadOperationStatusPostModel(string oid)
+        public YadOperationStatusPostModel(string opId)
         {
             Name = "do-status-operation";
-            Oid = oid;
+            _opId = opId;
         }
 
-        public string Oid { get; set; }
+        public string _opId { get; set; }
 
         public override IEnumerable<KeyValuePair<string, string>> ToKvp(int index)
         {
             foreach (var pair in base.ToKvp(index))
                 yield return pair;
-            
-            yield return new KeyValuePair<string, string>($"oid.{index}", Oid);
+
+            yield return new KeyValuePair<string, string>($"oid.{index}", _opId);
         }
     }
 
@@ -41,6 +41,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
     internal class YadOperationStatusParams
     {
         [JsonProperty("oid")]
-        public string Oid { get; set; }
+        public string OpId { get; set; }
     }
 }

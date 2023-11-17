@@ -20,7 +20,7 @@ namespace YaR.Clouds.Console
                 Prefixes.Add(prefix);
             }
         }
-        
+
         public List<string> Prefixes { get; } = new();
         public AuthenticationSchemes AuthenticationScheme => AuthenticationSchemes.Basic;
     }

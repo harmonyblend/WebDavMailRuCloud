@@ -21,8 +21,6 @@ using File = YaR.Clouds.Base.File;
 
 namespace YaR.Clouds
 {
-    //TODO: not thread-safe, refact
-
     /// <summary>
     /// Cloud client.
     /// </summary>
@@ -51,8 +49,8 @@ namespace YaR.Clouds
         /// </summary>
         private readonly EntryCache _entryCache;
 
-        internal IRequestRepo RequestRepo { get; }
-        internal Credentials Credentials { get; }
+        internal IRequestRepo RequestRepo{ get; }
+        public Credentials Credentials { get; }
         public AccountInfoResult AccountInfo { get; private set; } = null;
 
 
@@ -68,11 +66,46 @@ namespace YaR.Clouds
 
             if (!Credentials.IsAnonymous)
             {
-                AccountInfo = RequestRepo.AccountInfo().Result
-                    ?? throw new AuthenticationException("Auth token hasn't been retrieved.");
+                try
+                {
+                    AccountInfo = RequestRepo.AccountInfo().Result
+                        ?? throw new AuthenticationException("The cloud server rejected the credentials provided");
+                }
+                catch (Exception e) when (e.OfType<AuthenticationException>().Any())
+                {
+                    Logger.Warn("Refresh credentials");
+
+                    try
+                    {
+                        Credentials.Refresh();
+                    }
+                    catch (Exception e2) when (e2.OfType<AuthenticationException>().Any())
+                    {
+                        Exception ae = e2.OfType<AuthenticationException>().FirstOrDefault();
+                        Logger.Error("Failed to refresh credentials");
+                        throw new AuthenticationException(
+                            "The cloud server rejected the credentials provided. Then failed to refresh credentials.", ae);
+                    }
+
+                    // Проверка результата
+                    try
+                    {
+                        AccountInfo = RequestRepo.AccountInfo().Result
+                            ?? throw new AuthenticationException("The cloud server rejected the credentials provided");
+                    }
+                    catch (Exception e2) when (e2.OfType<AuthenticationException>().Any())
+                    {
+                        Exception ae = e2.OfType<AuthenticationException>().FirstOrDefault();
+                        Logger.Error("The server rejected the credentials provided");
+                        throw new AuthenticationException(
+                            "The cloud server rejected the credentials provided. " +
+                            "Credentials have been updated. " +
+                            "Then the server rejected the credentials again. ", ae);
+                    }
+                }
             }
 
-            _entryCache = new EntryCache(TimeSpan.FromSeconds(settings.CacheListingSec), RequestRepo.ActiveOperationsAsync);
+            _entryCache = new EntryCache(TimeSpan.FromSeconds(settings.CacheListingSec), RequestRepo.DetectOutsideChanges);
 
             ////TODO: wow very dummy linking, refact cache realization globally!
             //_itemCache = new ItemCache<string, IEntry>(TimeSpan.FromSeconds(settings.CacheListingSec));
@@ -230,7 +263,7 @@ namespace YaR.Clouds
             //if (itemType == ItemType.Unknown && ulink is not null)
             //    itemType = ulink.ItemType;
 
-            // TODO: cache (parent) folder for file 
+            // TODO: cache (parent) folder for file
             //if (itemType == ItemType.File)
             //{
             //    var cachefolder = datares.ToFolder(path, ulink);
@@ -258,8 +291,8 @@ namespace YaR.Clouds
 
 
             //if (itemType == ItemType.Unknown)
-            //    itemType = cloudResult is Folder 
-            //        ? ItemType.Folder 
+            //    itemType = cloudResult is Folder
+            //        ? ItemType.Folder
             //        : ItemType.File;
 
             //if (itemType == ItemType.Folder && cloudResult is Folder folder) // fill folder with links if any
@@ -474,7 +507,7 @@ namespace YaR.Clouds
         {
             foreach (var innerFile in file.Files)
             {
-                await Unpublish(innerFile.GetPublicLinks(this).First().Uri, innerFile.FullPath);
+                await Unpublish(innerFile.GetPublicLinks(this).FirstOrDefault().Uri, innerFile.FullPath);
                 innerFile.PublicLinks.Clear();
             }
             _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
@@ -1015,7 +1048,7 @@ namespace YaR.Clouds
                     switch (entry)
                     {
                     case Folder folder:
-                        await Unpublish(folder.GetPublicLinks(this).First().Uri, folder.FullPath);
+                        await Unpublish(folder.GetPublicLinks(this).FirstOrDefault().Uri, folder.FullPath);
                         break;
                     case File ifile:
                         await Unpublish(ifile);
@@ -1111,8 +1144,6 @@ namespace YaR.Clouds
         {
             CancelToken.Cancel(false);
         }
-
-        public IRequestRepo Repo => RequestRepo;
 
         /// <summary>
         /// Create folder on the server.
@@ -1280,7 +1311,8 @@ namespace YaR.Clouds
             if (_disposedValue) return;
             if (disposing)
             {
-                CancelToken.Dispose();
+                _entryCache?.Dispose();
+                CancelToken?.Dispose();
             }
             _disposedValue = true;
         }
@@ -1379,7 +1411,7 @@ namespace YaR.Clouds
 
         public void CleanTrash()
         {
-            Repo.CleanTrash();
+            RequestRepo.CleanTrash();
         }
     }
 }

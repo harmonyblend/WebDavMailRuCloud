@@ -20,6 +20,7 @@ namespace YaR.Clouds.Streams
                 return CreateXTSStream(file, start, end);
 
             //return new DownloadStream(file, _cloud.CloudApi, start, end);
+
             var stream = _cloud.RequestRepo.GetDownloadStream(file, start, end);
             return stream;
         }

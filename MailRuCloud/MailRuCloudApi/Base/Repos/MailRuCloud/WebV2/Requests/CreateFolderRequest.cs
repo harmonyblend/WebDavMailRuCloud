@@ -18,7 +18,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
 
         protected override byte[] CreateHttpContent()
         {
-            var data = $"home={Uri.EscapeDataString(_fullPath)}&conflict=rename&api={2}&token={Auth.AccessToken}";
+            var data = $"home={Uri.EscapeDataString(_fullPath)}&conflict=rename&api={2}&token={_auth.AccessToken}";
             return Encoding.UTF8.GetBytes(data);
         }
     }

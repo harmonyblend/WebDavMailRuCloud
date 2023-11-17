@@ -106,12 +106,12 @@ namespace YaR.Clouds.SpecialCommands
             if (!res.IsValid)
                 return null;
 
-            var parames = ParseParameters(res.Data);
-            var commandContainer = FindCommandContainer(parames);
+            var parameters = ParseParameters(res.Data);
+            var commandContainer = FindCommandContainer(parameters);
             if (commandContainer == null) return null;
 
-            parames = parames.Skip(commandContainer.Commands.Length).ToList();
-            var cmd = commandContainer.CreateFunc(cloud, res.Path, parames);
+            parameters = parameters.Skip(commandContainer.Commands.Length).ToList();
+            var cmd = commandContainer.CreateFunc(cloud, res.Path, parameters);
 
             return cmd;
         }
@@ -145,12 +145,12 @@ namespace YaR.Clouds.SpecialCommands
 
         }
 
-        private static SpecialCommandContainer FindCommandContainer(ICollection<string> parames)
+        private static SpecialCommandContainer FindCommandContainer(ICollection<string> parameters)
         {
             var commandContainer = CommandContainers
                 .Where(cm =>
-                    cm.Commands.Length <= parames.Count &&
-                    cm.Commands.SequenceEqual(parames.Take(cm.Commands.Length)))
+                    cm.Commands.Length <= parameters.Count &&
+                    cm.Commands.SequenceEqual(parameters.Take(cm.Commands.Length)))
                 .Aggregate((agg, next) => next.Commands.Length > agg.Commands.Length ? next : agg);
 
             return commandContainer;
@@ -187,5 +187,4 @@ namespace YaR.Clouds.SpecialCommands
         }
 
     }
-
 }

@@ -4,7 +4,7 @@ using YaR.Clouds.Base.Requests;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
 {
-    abstract class BaseRequestMobile<T> : BaseRequest<ResponseBodyStream, T> where T : class 
+    abstract class BaseRequestMobile<T> : BaseRequest<ResponseBodyStream, T> where T : class
     {
         private readonly string _metaServer;
 
@@ -13,7 +13,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
             _metaServer = metaServer;
         }
 
-        protected override string RelationalUri => $"{_metaServer}?token={Auth.AccessToken}&client_id={Settings.ClientId}";
+        protected override string RelationalUri => $"{_metaServer}?token={_auth.AccessToken}&client_id={_settings.ClientId}";
 
         protected override ResponseBodyStream Transport(Stream stream)
         {

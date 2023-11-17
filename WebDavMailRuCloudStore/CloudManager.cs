@@ -1,103 +1,146 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Net;
-using System.Security.Authentication;
+using System.Reflection;
 using System.Security.Principal;
 using System.Threading;
 using YaR.Clouds.Base;
 
-namespace YaR.Clouds.WebDavStore
+namespace YaR.Clouds.WebDavStore;
+
+public static class CloudManager
 {
-    public static class CloudManager
+    private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+
+    private class ClockedCloud
     {
-        private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(CloudManager));
+        public DateTime LastAccess;
+        public Cloud Cloud;
+    }
 
-        private static readonly ConcurrentDictionary<string, Cloud> CloudCache = new(StringComparer.InvariantCultureIgnoreCase);
+    private static readonly ConcurrentDictionary<string, ClockedCloud> CloudCache
+        = new(StringComparer.InvariantCultureIgnoreCase);
 
-        public static CloudSettings Settings { get; set; }
+    public static CloudSettings Settings { get; set; }
 
-        private static SemaphoreSlim _locker = new SemaphoreSlim(1);
+    private static readonly SemaphoreSlim _dictionaryLocker = new SemaphoreSlim(1);
+    private static readonly SemaphoreSlim _creationLocker = new SemaphoreSlim(1);
+    private static readonly System.Timers.Timer _cleanTimer;
 
-        public static Cloud Instance(IIdentity identity)
+    static CloudManager()
+    {
+        _cleanTimer = new System.Timers.Timer()
         {
-            var basicIdentity = (HttpListenerBasicIdentity) identity;
-            string key = basicIdentity.Name + basicIdentity.Password;
+            Interval = 60 * 1000, // 1 minute
+            Enabled = false,
+            AutoReset = true
+        };
+        _cleanTimer.Elapsed += RemoveExpired;
+    }
 
-            if (CloudCache.TryGetValue(key, out var cloud))
-                return cloud;
+    public static Cloud Instance(IIdentity identity)
+    {
+        var basicIdentity = (HttpListenerBasicIdentity)identity;
+        string key = basicIdentity.Name + basicIdentity.Password;
 
-            _locker.Wait();
+        _dictionaryLocker.Wait();
+        try
+        {
+            if (CloudCache.TryGetValue(key, out var cloudItem))
+            {
+                cloudItem.LastAccess = DateTime.Now;
+                return cloudItem.Cloud;
+            }
+        }
+        finally
+        {
+            _dictionaryLocker.Release();
+        }
+
+        _creationLocker.Wait();
+        try
+        {
+            // Когда дождались своей очереди на создание экземпляра,
+            // обязательно надо проверить, что кто-то уже не создал экземпляр,
+            // пока стояли в очереди на создание.
+            if (CloudCache.TryGetValue(key, out var cloudItem))
+            {
+                _dictionaryLocker.Wait();
+                try
+                {
+                    cloudItem.LastAccess = DateTime.Now;
+                    return cloudItem.Cloud;
+                }
+                finally
+                {
+                    _dictionaryLocker.Release();
+                }
+            }
+            Cloud cloudInstance = CreateCloud(basicIdentity);
+            _dictionaryLocker.Wait();
             try
             {
-                if (CloudCache.TryGetValue(key, out cloud))
-                    return cloud;
+                CloudCache.TryAdd(key, new ClockedCloud { LastAccess = DateTime.Now, Cloud = cloudInstance });
 
-                cloud = CreateCloud(basicIdentity);
+                if (!_cleanTimer.Enabled)
+                    _cleanTimer.Enabled = true;
 
-                CloudCache.TryAdd(key, cloud);
+                return cloudInstance;
             }
             finally
             {
-                _locker.Release();
+                _dictionaryLocker.Release();
             }
-
-            return cloud;
         }
-
-        private static Cloud CreateCloud(HttpListenerBasicIdentity identity)
+        finally
         {
-            var credentials = new Credentials(identity.Name, identity.Password);
+            _creationLocker.Release();
+        }
+    }
 
-            if (credentials.Protocol == Protocol.Autodetect &&
-                Settings.Protocol != Protocol.Autodetect)
-            {
-                // Если протокол не определился из строки логина,
-                // то пользуемся подсказкой в виде параметра командной строки
-                credentials.Protocol = Settings.Protocol;
-            }
+    private static Cloud CreateCloud(HttpListenerBasicIdentity identity)
+    {
+        var credentials = new Credentials(Settings, identity.Name, identity.Password);
 
-            if (credentials.Protocol == Protocol.Autodetect &&
-                credentials.CloudType == CloudType.Yandex)
+        var cloud = new Cloud(Settings, credentials);
+        Logger.Warn($"{(credentials.CloudType == CloudType.Mail ? "Mail.Ru" : "Yandex.Ru")} " +
+            $"cloud instance created for {credentials.Login}, " +
+            $"protocol is {credentials.Protocol}" +
+            $"{(credentials.AuthenticationUsingBrowser ? ", using browser cookies" : "")}");
+
+        return cloud;
+    }
+
+    private static void RemoveExpired(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        _dictionaryLocker.Wait();
+        try
+        {
+            DateTime threshold = DateTime.Now - TimeSpan.FromMinutes(Settings.CloudInstanceTimeoutMinutes);
+            foreach (var pair in CloudCache)
             {
-                if (string.IsNullOrEmpty(Settings.BrowserAuthenticatorUrl) ||
-                    string.IsNullOrEmpty(Settings.BrowserAuthenticatorPassword))
+                if (pair.Value.LastAccess < threshold)
                 {
-                    credentials.Protocol = Protocol.YadWeb;
-                }
-                else
-                if (!string.IsNullOrEmpty(Settings.BrowserAuthenticatorUrl) &&
-                    !string.IsNullOrEmpty(Settings.BrowserAuthenticatorPassword) &&
-                    identity.Password.Equals(Settings.BrowserAuthenticatorPassword, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    credentials.Protocol = Protocol.YadWebV2;
-                }
-                else
-                {
-                    Logger.Info("Protocol auto detect is ON. Can not choose between YadWeb and YadWebV2");
-                    throw new InvalidCredentialException(
-                        "Protocol auto detect is ON. Can not choose between YadWeb and YadWebV2. " +
-                        "Please specify protocol version in login string, see manuals.");
+                    CloudCache.TryRemove(pair.Key, out var removedItem);
+
+                    Credentials credentials = removedItem.Cloud.Credentials;
+                    Logger.Warn($"{(credentials.CloudType == CloudType.Mail ? "Mail.Ru" : "Yandex.Ru")} " +
+                        $"cloud instance for {credentials.Login} is disposed");
+
+                    try
+                    {
+                        removedItem.Cloud?.Dispose();
+                    }
+                    catch { }
                 }
             }
 
-            if (credentials.CloudType == CloudType.Unkown)
-            {
-                Logger.Info("Cloud type is not detected by user login string");
-                throw new InvalidCredentialException("Cloud type is not detected. " +
-                    "Please specify protocol and email in login string, see manuals.");
-            }
-
-            if (credentials.Protocol == Protocol.Autodetect)
-            {
-                Logger.Info("Protocol is undefined by user credentials");
-                throw new InvalidCredentialException("Protocol type is not detected. " +
-                    "Please specify protocol and email in login string, see manuals.");
-            }
-
-            var cloud = new Cloud(Settings, credentials);
-            Logger.Info($"Cloud instance created for {credentials.Login}");
-
-            return cloud;
+            if (CloudCache.IsEmpty)
+                _cleanTimer.Enabled = false;
+        }
+        finally
+        {
+            _dictionaryLocker.Release();
         }
     }
 }

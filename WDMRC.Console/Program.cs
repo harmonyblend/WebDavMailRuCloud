@@ -12,7 +12,7 @@ namespace YaR.Clouds.Console
         private static void Main(string[] args)
         {
             var result = Parser.Default.ParseArguments<CommandLineOptions>(args);
-            
+
             var exitCode = result
                 .MapResult(
                     options =>

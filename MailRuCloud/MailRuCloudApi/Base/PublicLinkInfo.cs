@@ -16,7 +16,7 @@ namespace YaR.Clouds.Base
         public PublicLinkInfo(string urlstring):this("", new Uri(urlstring))
         {
         }
-        
+
         public PublicLinkInfo(string type, Uri url)
         {
             Init(type,url);
@@ -24,7 +24,7 @@ namespace YaR.Clouds.Base
 
         public PublicLinkInfo(Uri url):this("", url)
         {
-        }       
+        }
 
         private void Init(string type, string baseurl, string urlstring)
         {
@@ -41,7 +41,7 @@ namespace YaR.Clouds.Base
             Type = type;
             Uri = url;
         }
-        
+
         public string Type { get; set; }
 
         public Uri Uri { get; private set; }

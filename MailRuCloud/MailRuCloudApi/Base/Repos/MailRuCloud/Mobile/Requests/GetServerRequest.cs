@@ -7,7 +7,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
         public GetServerRequest(HttpCommonSettings settings) : base(settings)
         {
         }
-        
+
         protected override string RelationalUri => "https://dispatcher.cloud.mail.ru/d";
     }
 }

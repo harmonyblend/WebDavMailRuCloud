@@ -13,6 +13,6 @@ namespace YaR.Clouds.Base
             RemoteHash = remoteHash;
         }
 
-        public override string Message => $"Local and remote hashes doen not match, local = {LocalHash}, remote = {RemoteHash}";
+        public override string Message => $"Local and remote hashes does not match, local = {LocalHash}, remote = {RemoteHash}";
     }
 }

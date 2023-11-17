@@ -12,7 +12,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         private readonly int _limit;
 
 
-        public ItemInfoRequest(HttpCommonSettings settings, IAuth auth, RemotePath path, int offset = 0, int limit = int.MaxValue) 
+        public ItemInfoRequest(HttpCommonSettings settings, IAuth auth, RemotePath path, int offset = 0, int limit = int.MaxValue)
             : base(settings, auth)
         {
             _isWebLink = path.IsLink;
@@ -34,8 +34,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
             get
             {
                 var uri = _isWebLink
-                    ? $"/api/v2/file?token={Auth.AccessToken}&weblink={Uri.EscapeDataString(_path)}&offset={_offset}&limit={_limit}"
-                    : $"/api/v2/file?token={Auth.AccessToken}&home={Uri.EscapeDataString(_path)}&offset={_offset}&limit={_limit}";
+                    ? $"/api/v2/file?token={_auth.AccessToken}&weblink={Uri.EscapeDataString(_path)}&offset={_offset}&limit={_limit}"
+                    : $"/api/v2/file?token={_auth.AccessToken}&home={Uri.EscapeDataString(_path)}&offset={_offset}&limit={_limit}";
                 return uri;
             }
         }

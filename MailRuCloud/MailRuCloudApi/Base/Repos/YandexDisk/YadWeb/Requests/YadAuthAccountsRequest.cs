@@ -10,7 +10,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
     {
         private readonly string _csrf;
 
-        public YadAuthAccountsRequest(HttpCommonSettings settings, IAuth auth, string csrf) 
+        public YadAuthAccountsRequest(HttpCommonSettings settings, IAuth auth, string csrf)
             : base(settings, auth)
         {
             _csrf = csrf;

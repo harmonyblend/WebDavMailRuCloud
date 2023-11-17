@@ -7,7 +7,7 @@ namespace YaR.Clouds.MailRuCloud.TwoFA.UI
     // ReSharper disable once UnusedType.Global
     public class AuthCodeWindow : ITwoFaHandler
     {
-        public AuthCodeWindow(IEnumerable<KeyValuePair<string, string>> parames)
+        public AuthCodeWindow(IEnumerable<KeyValuePair<string, string>> parameters)
         {
         }
 

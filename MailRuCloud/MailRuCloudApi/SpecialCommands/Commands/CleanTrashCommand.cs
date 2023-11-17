@@ -8,7 +8,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
     /// </summary>
     public class CleanTrashCommand : SpecialCommand
     {
-        public CleanTrashCommand(Cloud cloud, string path, IList<string> parames) : base(cloud, path, parames)
+        public CleanTrashCommand(Cloud cloud, string path, IList<string> parameters) : base(cloud, path, parameters)
         {
         }
 
@@ -16,7 +16,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public override async Task<SpecialCommandResult> Execute()
         {
-            Cloud.CleanTrash();
+            _cloud.CleanTrash();
 
             return await Task.FromResult(SpecialCommandResult.Success);
         }

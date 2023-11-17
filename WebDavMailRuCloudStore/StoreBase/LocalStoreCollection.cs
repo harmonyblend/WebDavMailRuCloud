@@ -30,7 +30,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
         private string DebuggerDisplay => FolderWithDescendants.FullPath;
 
-        public LocalStoreCollection(IHttpContext context, Folder folderWithChildren, bool isWritable, 
+        public LocalStoreCollection(IHttpContext context, Folder folderWithChildren, bool isWritable,
             LocalStore store)
         {
             _context = context;
@@ -95,7 +95,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
         public Task<IStoreItem> GetItemAsync(string name, IHttpContext httpContext)
         {
-            var res = name == string.Empty 
+            var res = name == string.Empty
                 ? this
                 : Items.FirstOrDefault(i => i.Name == name);
 
@@ -308,7 +308,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
         public override bool Equals(object obj)
         {
-            return obj is LocalStoreCollection storeCollection && 
+            return obj is LocalStoreCollection storeCollection &&
                    storeCollection.FolderWithDescendants.FullPath.Equals(FolderWithDescendants.FullPath, StringComparison.CurrentCultureIgnoreCase);
         }
     }

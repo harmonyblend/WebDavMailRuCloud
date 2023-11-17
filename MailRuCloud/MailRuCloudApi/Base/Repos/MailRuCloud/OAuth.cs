@@ -8,7 +8,6 @@ using YaR.Clouds.Base.Requests.Types;
 using YaR.Clouds.Common;
 using static YaR.Clouds.Cloud;
 
-
 namespace YaR.Clouds.Base.Repos.MailRuCloud
 {
     internal class OAuth : IAuth
@@ -32,9 +31,11 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
             _authToken = new Cached<AuthTokenResult>(old =>
                 {
-                    Logger.Debug(null == old ? "OAuth: authorizing." : "OAuth: AuthToken expired, refreshing.");
+                    Logger.Debug(old is null
+                        ? "OAuth: authorizing."
+                        : "OAuth: AuthToken expired, refreshing.");
 
-                    var token = null == old || string.IsNullOrEmpty(old.RefreshToken)
+                    var token = string.IsNullOrEmpty(old?.RefreshToken)
                         ? Auth().Result
                         : Refresh(old.RefreshToken).Result;
 
@@ -68,7 +69,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             var req = await new OAuthRequest(_settings, _creds).MakeRequestAsync(_connectionLimiter);
             var res = req.ToAuthTokenResult();
 
-            if (!res.IsSecondStepRequired) 
+            if (!res.IsSecondStepRequired)
                 return res;
 
             if (null == _onAuthCodeRequired)

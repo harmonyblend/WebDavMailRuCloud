@@ -23,7 +23,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
         public long Depth { get; set; }
 
         public Option Options { get; set; } = Option.Unknown128 | Option.Unknown256 | Option.FolderSize | Option.TotalSpace | Option.UsedSpace;
-    
+
         [Flags]
         internal enum Option
         {
@@ -109,7 +109,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
 		    PinUpper = 3,
 		    Unknown15 = 15
 	    }
-	    
+
         private FsItem Deserialize(ResponseBodyStream data, string fullPath)
         {
 	        fullPath = WebDavPath.Clean(fullPath);
@@ -183,7 +183,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
             int head = data.ReadIntSpl();
             if ((head & 4096) != 0)
             {
-                data.ReadNBytes(16); // var nodeId = 
+                data.ReadNBytes(16); // var nodeId =
             }
             string name = data.ReadNBytesAsString(data.ReadShort());
 
@@ -194,7 +194,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
                 : null;
             void ProcessDelete()
             {
-                if ((Options & Option.Delete) == 0) 
+                if ((Options & Option.Delete) == 0)
                     return;
 
                 data.ReadPu32();  // dunno

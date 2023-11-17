@@ -117,7 +117,7 @@ namespace YaR.Clouds.Links
                             {
                                 f.MapTo = WebDavPath.Clean(f.MapTo);
                                 if (!f.Href.IsAbsoluteUri)
-                                    f.Href = new Uri(_cloud.Repo.PublicBaseUrlDefault + f.Href);
+                                    f.Href = new Uri(_cloud.RequestRepo.PublicBaseUrlDefault + f.Href);
                             }
                         }
                     }
@@ -249,9 +249,9 @@ namespace YaR.Clouds.Links
         //        var entry = _cloud.GetItem(path).Result;
         //        return entry is not null;
         //    }
-        //    catch (AggregateException e) 
+        //    catch (AggregateException e)
         //    when (  // let's check if there really no file or just other network error
-        //            e.InnerException is WebException we && 
+        //            e.InnerException is WebException we &&
         //            (we.Response as HttpWebResponse)?.StatusCode == HttpStatusCode.NotFound
         //         )
         //    {
@@ -260,7 +260,7 @@ namespace YaR.Clouds.Links
         //}
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="path"></param>
         /// <param name="doResolveType">Resolving file/folder type requires addition request to cloud</param>
@@ -330,7 +330,7 @@ namespace YaR.Clouds.Links
         //public IEnumerable<ItemLink> GetChildren(string folderFullPath, bool doResolveType)
         //{
         //    var lst = _itemList.Items
-        //        .Where(it => 
+        //        .Where(it =>
         //        WebDavPath.IsParentOrSame(folderFullPath, it.MapTo));
 
         //    return lst;
@@ -393,7 +393,7 @@ namespace YaR.Clouds.Links
         //    foreach (string pbu in _cloud.RequestRepo.PublicBaseUrls)
         //    {
         //        if (!string.IsNullOrEmpty(pbu))
-        //            if (url.StartsWith(pbu)) 
+        //            if (url.StartsWith(pbu))
         //                return url.Remove(pbu.Length);
         //    }
         //    return url;
@@ -444,14 +444,14 @@ namespace YaR.Clouds.Links
         ///  <param name="destinationPath"></param>
         /// <param name="doSave">Сохранить изменения в файл в облаке</param>
         /// <returns></returns>
-        ///  <remarks>            
+        ///  <remarks>
         ///  Корневую ссылку просто перенесем
-        /// 
+        ///
         ///  Если это вложенная ссылка, то перенести ее нельзя, а можно
         ///  1. сделать новую ссылку на эту вложенность
         ///  2. скопировать содержимое
         ///  если следовать логике, что при копировании мы копируем содержимое ссылок, а при перемещении - перемещаем ссылки, то надо делать новую ссылку
-        ///  
+        ///
         ///  Логика хороша, но
         ///  некоторые клиенты сначала делают структуру каталогов, а потом по одному переносят файлы, например, TotalCommander c плагином WebDAV v.2.9
         ///  в таких условиях на каждый файл получится свой собственный линк, если делать правильно, т.е. в итоге расплодится миллион линков

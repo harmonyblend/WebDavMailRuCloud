@@ -153,7 +153,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
         public string Mimetype { get; set; }
 
         [JsonProperty("drweb")]
-        public long Drweb { get; set; }
+        public long DrWeb { get; set; }
 
         [JsonProperty("sizes")]
         public Size[] Sizes { get; set; }
@@ -162,7 +162,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
         public string ResourceId { get; set; }
 
         [JsonProperty("mediatype")]
-        public string Mediatype { get; set; }
+        public string MediaType { get; set; }
 
         [JsonProperty("etime")]
         public long Etime { get; set; }
@@ -174,7 +174,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
         public string FileId { get; set; }
 
         [JsonProperty("photoslice_time")]
-        public long PhotosliceTime { get; set; }
+        public long PhotoSliceTime { get; set; }
 
         [JsonProperty("size")]
         public long Size { get; set; }
@@ -193,7 +193,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
     internal class YadGetClustersWithResourcesRequestParams
     {
         [JsonProperty("photosliceId")]
-        public string PhotosliceId { get; set; }
+        public string PhotoSliceId { get; set; }
 
         [JsonProperty("clusters")]
         public string Clusters { get; set; }
@@ -213,7 +213,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
         {
             if (reader.TokenType == JsonToken.Null) return null;
             var value = serializer.Deserialize<string>(reader);
-            
+
             return value switch
             {
                 "camera" => YadMediaFilter.Camera,
@@ -249,7 +249,4 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models.Media
         //public static readonly FilterConverter Singleton = new FilterConverter();
     }
     //------------------------------
-
-
-
 }

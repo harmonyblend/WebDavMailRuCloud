@@ -12,14 +12,14 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 {
     class YadAuthPasswordRequest : BaseRequestJson<YadAuthPasswordRequestResult>
     {
-        private readonly IAuth _auth;
+        //private readonly IAuth _auth;
         private readonly string _csrf;
         private readonly string _trackId;
 
-        public YadAuthPasswordRequest(HttpCommonSettings settings, IAuth auth, string csrf, string trackId) 
+        public YadAuthPasswordRequest(HttpCommonSettings settings, IAuth auth, string csrf, string trackId)
             : base(settings, auth)
         {
-            _auth = auth;
+            //_auth = auth;
             _csrf = csrf;
             _trackId = trackId;
         }

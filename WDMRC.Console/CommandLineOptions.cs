@@ -1,6 +1,4 @@
-﻿// Ignore Spelling: Ua
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using CommandLine;
@@ -85,5 +83,8 @@ namespace YaR.Clouds.Console
 
         [Option("read-write-timeout-sec", Required = false, Default = 300, HelpText = "Timeout in seconds, the maximum duration of read or write operation")]
         public int ReadWriteTimeoutSec { get; set; }
+
+        [Option("cloud-instance-timeout", Required = false, Default = 30, HelpText = "Cloud instance (server+login) expiration timeout in minutes")]
+        public int CloudInstanceTimeoutMinutes { get; set; }
     }
 }

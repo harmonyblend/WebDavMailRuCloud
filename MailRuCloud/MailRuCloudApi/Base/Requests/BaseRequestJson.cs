@@ -43,7 +43,5 @@ namespace YaR.Clouds.Base.Requests
             //}
 
         }
-
-
     }
 }

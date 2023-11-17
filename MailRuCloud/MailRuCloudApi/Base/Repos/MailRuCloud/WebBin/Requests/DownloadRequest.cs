@@ -2,24 +2,23 @@
 using System.Linq;
 using System.Net;
 using System.Collections.Generic;
-
 using YaR.Clouds.Base.Requests;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin.Requests
 {
     class DownloadRequest
     {
-        public DownloadRequest(HttpCommonSettings settings, IAuth authenticator,
-            File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls)
+        public DownloadRequest(HttpCommonSettings settings, IAuth auth,
+            File file, long inStart, long inEnd, string downServerUrl, IEnumerable<string> publicBaseUrls)
         {
-            Request = CreateRequest(settings, authenticator, file, instart, inend, downServerUrl, publicBaseUrls);
+            Request = CreateRequest(settings, auth, file, inStart, inEnd, downServerUrl, publicBaseUrls);
         }
 
         public HttpWebRequest Request { get; }
 
         private static HttpWebRequest CreateRequest(HttpCommonSettings settings,
-            IAuth authenticator, File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls)
-            //(IAuth authenticator, IWebProxy proxy, string url, long instart, long inend,  string userAgent)
+            IAuth auth, File file, long instart, long inend, string downServerUrl, IEnumerable<string> publicBaseUrls)
+            //(IAuth authenticator, IWebProxy proxy, string url, long inStart, long inEnd,  string userAgent)
         {
             bool isLinked = !file.PublicLinks.IsEmpty;
 
@@ -31,7 +30,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin.Requests
                 var uriistr = urii?.OriginalString;
                 var baseura = uriistr == null
                     ? null
-                    : publicBaseUrls.First(pbu => uriistr.StartsWith(pbu, StringComparison.InvariantCulture));
+                    : publicBaseUrls.FirstOrDefault(pbu => uriistr.StartsWith(pbu, StringComparison.InvariantCulture));
                 if (string.IsNullOrEmpty(baseura))
                     throw new ArgumentException("URL does not starts with base URL");
 
@@ -40,7 +39,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin.Requests
             else
             {
                 url = $"{downServerUrl}{Uri.EscapeDataString(file.FullPath.TrimStart('/'))}";
-                url += $"?client_id={settings.ClientId}&token={authenticator.AccessToken}";
+                url += $"?client_id={settings.ClientId}&token={auth.AccessToken}";
             }
 
             var uri = new Uri(url);

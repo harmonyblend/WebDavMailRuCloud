@@ -49,7 +49,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.Types
                 int high = (int)value & 127;
                 value >>= 7;
                 intValue = (int)value;
-                if (intValue != 0) 
+                if (intValue != 0)
                     high |= 128;
                 _stream.WriteByte((byte)high);
             } while (intValue != 0);

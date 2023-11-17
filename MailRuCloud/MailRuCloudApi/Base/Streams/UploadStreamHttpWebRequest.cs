@@ -115,7 +115,7 @@
 //                throw;
 //            }
 //            #endif
-//            finally 
+//            finally
 //            {
 //                _ringBuffer?.Dispose();
 //                _sha1?.Dispose();

@@ -1,11 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Net;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Linq;
 using YaR.Clouds.Base;
-using YaR.Clouds.Common;
 
 namespace YaR.Clouds.Extensions
 {
@@ -142,6 +138,138 @@ namespace YaR.Clouds.Extensions
 
                 ex = ex.InnerException;
             }
+        }
+
+        public static bool ContainsIgnoreCase(this string stringSearchIn, string stringToSearchFor,
+            StringComparison comparisonType = StringComparison.InvariantCultureIgnoreCase)
+        {
+#if NET48
+            System.Globalization.CultureInfo cu = comparisonType == StringComparison.InvariantCultureIgnoreCase
+                ? System.Globalization.CultureInfo.InvariantCulture
+                : System.Globalization.CultureInfo.CurrentCulture;
+            return cu.CompareInfo.IndexOf(stringSearchIn, stringToSearchFor) >= 0;
+#else
+            return stringSearchIn.Contains(stringToSearchFor, comparisonType);
+#endif
+        }
+
+        /// <summary>Finds all exception of the requested type.</summary>
+        /// <typeparam name="T">The type of exception to look for.</typeparam>
+        /// <param name="exception">The exception to look in.</param>
+        /// <returns>
+        /// <para>
+        /// The enumeration of exceptions matching the specified type or null if not found.
+        /// </para>
+        /// <para>
+        /// </returns>
+        public static IEnumerable<T> OfType<T>(this Exception exception) where T : Exception
+        {
+            return exception.OfType<T>(false);
+        }
+
+        /// <summary>Finds all exception of the requested type.</summary>
+        /// <typeparam name="T">The type of exception to look for.</typeparam>
+        /// <param name="exception">The exception to look in.</param>
+        /// <returns>
+        /// <para>
+        /// If throwIfNotNotFound=false,
+        /// the enumeration of exceptions matching the specified type or null if not found.
+        /// </para>
+        /// <para>
+        /// If throwIfNotNotFound=true,
+        /// the enumeration of exceptions matching the specified type or throws the flatten AggregateException if not found.
+        /// </para>
+        /// </returns>
+        public static IEnumerable<T> OfType<T>(this Exception exception, bool throwIfNotNotFound = false) where T : Exception
+        {
+            if (exception is AggregateException ae)
+            {
+                AggregateException flatten = ae.Flatten();
+                IEnumerable<T> result = flatten.InnerExceptions.OfType<T>();
+                if (throwIfNotNotFound && !result.Any())
+                    throw flatten;
+                return result;
+            }
+            else
+            {
+                if (exception is T item)
+                {
+                    T[] array = new T[] { item };
+                    return array;
+                }
+
+                if (throwIfNotNotFound)
+                    throw exception;
+            }
+            return Enumerable.Empty<T>();
+        }
+
+        /// <summary>Finds first occurrence of exception of the requested type.</summary>
+        /// <typeparam name="T">The type of exception to look for.</typeparam>
+        /// <param name="exception">The exception to look in.</param>
+        /// <returns>
+        /// <para>
+        /// The exception matching the specified type or null if not found.
+        /// </para>
+        /// </returns>
+        public static T FirstOfType<T>(this Exception exception) where T : Exception
+        {
+            return exception.FirstOfType<T>(false);
+        }
+
+        /// <summary>Finds first occurrence of exception of the requested type.</summary>
+        /// <typeparam name="T">The type of exception to look for.</typeparam>
+        /// <param name="exception">The exception to look in.</param>
+        /// <returns>
+        /// <para>
+        /// If throwIfNotNotFound=false,
+        /// the exception matching the specified type or null if not found.
+        /// </para>
+        /// <para>
+        /// If throwIfNotNotFound=true,
+        /// the exceptions matching the specified type or throws the flatten AggregateException if not found.
+        /// </para>
+        /// </returns>
+        public static T FirstOfType<T>(this Exception exception, bool throwIfNotNotFound = false) where T : Exception
+        {
+            if (exception is AggregateException ae)
+            {
+                AggregateException flatten = ae.Flatten();
+                T result = (T)flatten.InnerExceptions.FirstOrDefault(x => x is T);
+                if (throwIfNotNotFound && result is null)
+                    throw flatten;
+                return result;
+            }
+            else
+            {
+                if (exception is T item)
+                {
+                    return item;
+                }
+
+                if (throwIfNotNotFound)
+                    throw exception;
+            }
+            return null;
+        }
+
+        /// <summary>Searches through all inner exceptions for exception of the requested type and returns true if found.</summary>
+        /// <typeparam name="T">The type of exception to look for.</typeparam>
+        /// <param name="exception">The exception to look in.</param>
+        /// <returns>
+        /// <para>
+        /// True if the exception of the requested type is found, otherwise False.
+        /// </para>
+        /// </returns>
+        public static bool Contains<T>(this Exception exception) where T : Exception
+        {
+            if (exception is AggregateException ae)
+            {
+                AggregateException flatten = ae.Flatten();
+                if (flatten.InnerExceptions.Any(x => x is T))
+                    return true;
+            }
+            return exception is T;
         }
     }
 }

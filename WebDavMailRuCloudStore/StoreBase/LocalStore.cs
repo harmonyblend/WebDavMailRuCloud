@@ -30,7 +30,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         public async Task<IStoreItem> GetItemAsync(WebDavUri uri, IHttpContext httpContext)
         {
             var path = uri.Path;
-            
+
             try
             {
                 var entry = await CloudManager

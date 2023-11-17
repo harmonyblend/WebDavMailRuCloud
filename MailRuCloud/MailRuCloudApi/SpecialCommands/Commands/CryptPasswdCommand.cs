@@ -8,7 +8,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
     /// </summary>
     public class CryptPasswdCommand : SpecialCommand
     {
-        public CryptPasswdCommand(Cloud cloud, string path, IList<string> parames) : base(cloud, path, parames)
+        public CryptPasswdCommand(Cloud cloud, string path, IList<string> parameters) : base(cloud, path, parameters)
         {
         }
 
@@ -16,11 +16,11 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public override async Task<SpecialCommandResult> Execute()
         {
-            var newPasswd = Parames[0];
+            var newPasswd = _parameters[0];
             if (string.IsNullOrEmpty(newPasswd))
                 return await Task.FromResult(new SpecialCommandResult(false, "Crypt password is empty"));
 
-            Cloud.Credentials.PasswordCrypt = newPasswd;
+            _cloud.Credentials.PasswordCrypt = newPasswd;
 
             return await Task.FromResult(SpecialCommandResult.Success);
         }

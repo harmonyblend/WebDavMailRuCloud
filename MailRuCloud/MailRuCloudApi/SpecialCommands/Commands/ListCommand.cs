@@ -23,18 +23,17 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public override async Task<SpecialCommandResult> Execute()
         {
-            string target = Parames.Count > 0 && !string.IsNullOrWhiteSpace(Parames[0])
-                ? Parames[0].StartsWith(WebDavPath.Separator) ? Parames[0] : WebDavPath.Combine(Path, Parames[0])
-                : Path;
+            string target = _parameters.Count > 0 && !string.IsNullOrWhiteSpace(_parameters[0])
+                ? _parameters[0].StartsWith(WebDavPath.Separator) ? _parameters[0] : WebDavPath.Combine(_path, _parameters[0])
+                : _path;
 
-            var resolvedTarget = await RemotePath.Get(target, Cloud.LinkManager);
-
-            var entry = await Cloud.RequestRepo.FolderInfo(resolvedTarget);
-            string resFilepath = WebDavPath.Combine(Path, string.Concat(entry.Name, FileListExtention));
+            var resolvedTarget = await RemotePath.Get(target, _cloud.LinkManager);
+            var entry = await _cloud.RequestRepo.FolderInfo(resolvedTarget);
+            string resFilepath = WebDavPath.Combine(_path, string.Concat(entry.Name, FileListExtention));
 
             var sb = new StringBuilder();
 
-            foreach (var e in Flat(entry, Cloud.LinkManager))
+            foreach (var e in Flat(entry, _cloud.LinkManager))
             {
                 string hash = (e as File)?.Hash.ToString() ?? "-";
                 string link = e.PublicLinks.Values.FirstOrDefault()?.Uri.OriginalString ?? "-";
@@ -42,7 +41,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                     $"{e.FullPath}\t{e.Size.DefaultValue}\t{e.CreationTimeUtc:yyyy.MM.dd HH:mm:ss}\t{hash}\t{link}");
             }
 
-            Cloud.UploadFile(resFilepath, sb.ToString());
+            _cloud.UploadFile(resFilepath, sb.ToString());
 
             return SpecialCommandResult.Success;
         }
@@ -59,7 +58,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                     File => it,
                     Folder ifolder => ifolder.IsChildrenLoaded
                         ? ifolder
-                        : Cloud.RequestRepo.FolderInfo(RemotePath.Get(it.FullPath, lm).Result, depth: 3).Result,
+                        : _cloud.RequestRepo.FolderInfo(RemotePath.Get(it.FullPath, lm).Result, depth: 3).Result,
                     _ => throw new NotImplementedException("Unknown item type")
                 })
                 .OrderBy(it => it.Name);

@@ -63,7 +63,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
         }
 
 
-        public Task<Stream> GetReadableStreamAsync(IHttpContext httpContext) //=> 
+        public Task<Stream> GetReadableStreamAsync(IHttpContext httpContext) //=>
         {
             var cloud = CloudManager.Instance((HttpListenerBasicIdentity)httpContext.Session.Principal.Identity);
             var range = httpContext.Request.GetRange();
@@ -131,16 +131,17 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
 
                 // Copy the information to the destination stream
-                using (var outputStream = IsWritable 
-                    ? await CloudManager.Instance(httpContext.Session.Principal.Identity).GetFileUploadStream(FileInfo.FullPath, FileInfo.Size, StreamCopiedAction, ServerProcessFinishedAction).ConfigureAwait(false)
-                    : null)
-                {
+                using var outputStream = IsWritable
+                    ? await CloudManager
+                              .Instance(httpContext.Session.Principal.Identity)
+                              .GetFileUploadStream(FileInfo.FullPath, FileInfo.Size, StreamCopiedAction, ServerProcessFinishedAction)
+                              .ConfigureAwait(false)
+                    : null;
 #if NET48
-                    await inputStream.CopyToAsync(outputStream).ConfigureAwait(false);
+                await inputStream.CopyToAsync(outputStream).ConfigureAwait(false);
 #else
-                    await inputStream.CopyToAsync(outputStream, cts.Token).ConfigureAwait(false);
+                await inputStream.CopyToAsync(outputStream, cts.Token).ConfigureAwait(false);
 #endif
-                }
                 return DavStatusCode.Ok;
             }
             catch (IOException ioException) when (ioException.IsDiskFull())
@@ -172,7 +173,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
                 // Create the item in the destination collection
                 var result = await destination.CreateItemAsync(name, overwrite, httpContext).ConfigureAwait(false);
 
-                if (result.Item == null) 
+                if (result.Item == null)
                     return new StoreItemResult(result.Result, result.Item);
 
                 using (var sourceStream = await GetReadableStreamAsync(httpContext).ConfigureAwait(false))
@@ -203,7 +204,7 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
         public override bool Equals(object obj)
         {
-            return obj is LocalStoreItem storeItem && 
+            return obj is LocalStoreItem storeItem &&
                    storeItem.FileInfo.FullPath.Equals(FileInfo.FullPath, StringComparison.CurrentCultureIgnoreCase);
         }
 
@@ -227,7 +228,4 @@ namespace YaR.Clouds.WebDavStore.StoreBase
             return bytes;
         }
     }
-
-
-
 }

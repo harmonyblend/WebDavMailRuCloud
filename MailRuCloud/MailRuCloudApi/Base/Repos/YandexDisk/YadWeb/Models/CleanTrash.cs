@@ -16,7 +16,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         public long AtVersion { get; set; }
 
         [JsonProperty("oid")]
-        public string Oid { get; set; }
+        public string OpId { get; set; }
 
         [JsonProperty("type")]
         public string Type { get; set; }

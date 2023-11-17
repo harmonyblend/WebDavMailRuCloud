@@ -14,7 +14,7 @@ namespace YaR.Clouds.Base.Requests
         public RequestException(string message, Exception inner) : base(message, inner) { }
 
         /// <summary>
-        /// HTTP Status Code retuned by server
+        /// HTTP Status Code returned by server
         /// </summary>
         public HttpStatusCode StatusCode { get; set; }
 
@@ -33,5 +33,4 @@ namespace YaR.Clouds.Base.Requests
         /// </summary>
         public long? ErrorCode { get; set; }
     }
-
 }

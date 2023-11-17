@@ -24,7 +24,7 @@ namespace Hasher
                             Protocol = options.Protocol
                         };
 
-                        var repoFabric = new RepoFabric(settings, new Credentials(string.Empty, string.Empty));
+                        var repoFabric = new RepoFabric(settings, new Credentials(settings, string.Empty, string.Empty));
                         var repo = repoFabric.Create();
 
                         var cards = new List<string>();
@@ -32,7 +32,7 @@ namespace Hasher
 
                         foreach (string filelist in options.Filelists)
                         {
-                            if (string.IsNullOrEmpty(filelist)) 
+                            if (string.IsNullOrEmpty(filelist))
                                 continue;
 
                             if (!File.Exists(filelist))
@@ -55,7 +55,7 @@ namespace Hasher
                             //string absPathWithFilename = Path.GetFullPath(card);
                             //string absPath = Path.GetDirectoryName(string.IsNullOrEmpty(path) ? "." : path);
 
-                            string[] filenames = Directory.GetFiles(absPath, pattern, 
+                            string[] filenames = Directory.GetFiles(absPath, pattern,
                                 options.IsRecursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
 
                             foreach (var filename in filenames)

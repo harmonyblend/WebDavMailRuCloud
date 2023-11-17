@@ -37,7 +37,7 @@ namespace YaR.Clouds.Streams
 
                 // #142 remove crypted file parts if size changed
                 await _cloud.Remove(file.FullPath);
-                
+
                 stream = GetCryptoStream(file, onUploaded);
             }
             else
@@ -51,7 +51,8 @@ namespace YaR.Clouds.Streams
         private Stream GetPlainStream(File file, FileUploadedDelegate onUploaded)
         {
             var stream = new SplittedUploadStream(file.FullPath, _cloud, file.Size, FileStreamSent, ServerFileProcessed);
-            if (onUploaded != null) stream.FileUploaded += onUploaded;
+            if (onUploaded is not null)
+                stream.FileUploaded += onUploaded;
             return stream;
         }
 
@@ -73,7 +74,8 @@ namespace YaR.Clouds.Streams
                 : (file.OriginalSize / XTSWriteOnlyStream.BlockSize + 1) * XTSWriteOnlyStream.BlockSize;
 
             var ustream = new SplittedUploadStream(file.FullPath, _cloud, size, null, null, false, file.ServiceInfo.CryptInfo);
-            if (onUploaded != null) ustream.FileUploaded += onUploaded;
+            if (onUploaded is not null)
+                ustream.FileUploaded += onUploaded;
             // ReSharper disable once RedundantArgumentDefaultValue
             var encustream = new XTSWriteOnlyStream(ustream, xts, XTSWriteOnlyStream.DefaultSectorSize)
             {

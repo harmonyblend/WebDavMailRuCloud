@@ -19,15 +19,15 @@ namespace YaR.Clouds.SpecialCommands.Commands
         {
             var res = await Task.Run(async () =>
             {
-                var sourceFileInfo = new FileInfo(Parames[0]);
+                var sourceFileInfo = new FileInfo(_parameters[0]);
 
                 string name = sourceFileInfo.Name;
-                string targetPath = WebDavPath.Combine(Path, name);
+                string targetPath = WebDavPath.Combine(_path, name);
 
-                Logger.Info($"COMMAND:COPY:{Parames[0]}");
+                Logger.Info($"COMMAND:COPY:{_parameters[0]}");
 
-                using (var source = System.IO.File.Open(Parames[0], FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (var target = await Cloud.GetFileUploadStream(targetPath, sourceFileInfo.Length, null, null).ConfigureAwait(false))
+                using (var source = System.IO.File.Open(_parameters[0], FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var target = await _cloud.GetFileUploadStream(targetPath, sourceFileInfo.Length, null, null).ConfigureAwait(false))
                 {
                     await source.CopyToAsync(target);
                 }

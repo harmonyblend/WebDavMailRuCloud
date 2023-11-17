@@ -43,7 +43,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
         public sealed override HttpCommonSettings HttpSettings { get; } = new()
         {
-            ClientId = "cloud-android"
+            //ClientId = "cloud-android"
+            ClientId = "cloud-win"
         };
 
         public WebBinRequestRepo(CloudSettings settings, IBasicCredentials credentials, AuthCodeRequiredDelegate onAuthCodeRequired)
@@ -56,7 +57,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             HttpSettings.Proxy = settings.Proxy;
 
             _onAuthCodeRequired = onAuthCodeRequired;
-            Authenticator = new OAuth(_connectionLimiter, HttpSettings, credentials, onAuthCodeRequired);
+            Auth = new OAuth(_connectionLimiter, HttpSettings, credentials, onAuthCodeRequired);
 
             ShardManager = new ShardManager(_connectionLimiter, this);
 
@@ -81,7 +82,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
             Cached<ServerRequestResult> downServer = null;
             var pendingServers = isLinked
-                ? ShardManager.WeblinkDownloadServersPending
+                ? ShardManager.WebLinkDownloadServersPending
                 : ShardManager.DownloadServersPending;
             Stopwatch watch = new Stopwatch();
 
@@ -92,7 +93,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
                 {
                     downServer = pendingServers.Next(downServer);
 
-                    request = new DownloadRequest(HttpSettings, Authenticator, file, instart, inend, downServer.Value.Url, PublicBaseUrls);
+                    request = new DownloadRequest(HttpSettings, Auth, file, instart, inend, downServer.Value.Url, PublicBaseUrls);
 
                     watch.Start();
                     var response = (HttpWebResponse)request.GetResponse();
@@ -142,7 +143,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
                 var banned = ShardManager.BannedShards.Value;
                 if (banned.All(bsh => bsh.Url != ishard.Url))
                 {
-                    if (refreshed) Authenticator.ExpireDownloadToken();
+                    if (refreshed) Auth.ExpireDownloadToken();
                     return ishard;
                 }
                 ShardManager.CachedShards.Expire();
@@ -158,14 +159,14 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
         public async Task<CloneItemResult> CloneItem(string fromUrl, string toPath)
         {
-            var req = await new CloneItemRequest(HttpSettings, Authenticator, fromUrl, toPath).MakeRequestAsync(_connectionLimiter);
+            var req = await new CloneItemRequest(HttpSettings, Auth, fromUrl, toPath).MakeRequestAsync(_connectionLimiter);
             var res = req.ToCloneItemResult();
             return res;
         }
 
         public async Task<CopyResult> Copy(string sourceFullPath, string destinationPath, ConflictResolver? conflictResolver = null)
         {
-            var req = await new CopyRequest(HttpSettings, Authenticator, sourceFullPath, destinationPath, conflictResolver).MakeRequestAsync(_connectionLimiter);
+            var req = await new CopyRequest(HttpSettings, Auth, sourceFullPath, destinationPath, conflictResolver).MakeRequestAsync(_connectionLimiter);
             var res = req.ToCopyResult();
             return res;
         }
@@ -176,7 +177,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             //var res = req.ToCopyResult();
             //return res;
 
-            var req = await new MoveRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, sourceFullPath, destinationPath)
+            var req = await new MoveRequest(HttpSettings, Auth, ShardManager.MetaServer.Url, sourceFullPath, destinationPath)
                 .MakeRequestAsync(_connectionLimiter);
 
             var res = req.ToCopyResult(WebDavPath.Name(destinationPath));
@@ -189,7 +190,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             try
             {
                 ListRequest.Result dataRes =
-                    await new ListRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, path, depth)
+                    await new ListRequest(HttpSettings, Auth, ShardManager.MetaServer.Url, path, depth)
                         .MakeRequestAsync(_connectionLimiter);
 
                 // если файл разбит или зашифрован - то надо взять все куски
@@ -202,7 +203,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
                     string name = WebDavPath.Name(path);
                     path = WebDavPath.Parent(path);
 
-                    dataRes = await new ListRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, path, 1)
+                    dataRes = await new ListRequest(HttpSettings, Auth, ShardManager.MetaServer.Url, path, 1)
                         .MakeRequestAsync(_connectionLimiter);
 
                     var folder = dataRes.ToFolder();
@@ -232,7 +233,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             FolderInfoResult datares;
             try
             {
-                datares = await new FolderInfoRequest(HttpSettings, Authenticator, path, offset, limit)
+                datares = await new FolderInfoRequest(HttpSettings, Auth, path, offset, limit)
                     .MakeRequestAsync(_connectionLimiter);
             }
             catch (WebException e) when (e.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound })
@@ -261,6 +262,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
                     nameReplacement: path.Link?.IsLinkedToFileSystem ?? true ? WebDavPath.Name(path.Path) : path.Link.Name)
                 : (IEntry)datares.ToFolder(PublicBaseUrlDefault, path.Path, path.Link);
 
+            if (limit == int.MaxValue && entry is Folder fld)
+                fld.IsChildrenLoaded = limit == int.MaxValue;
+
             return entry;
         }
 
@@ -270,20 +274,20 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
         public async Task<FolderInfoResult> ItemInfo(RemotePath path, int offset = 0, int limit = int.MaxValue)
         {
-            var req = await new ItemInfoRequest(HttpSettings, Authenticator, path, offset, limit).MakeRequestAsync(_connectionLimiter);
+            var req = await new ItemInfoRequest(HttpSettings, Auth, path, offset, limit).MakeRequestAsync(_connectionLimiter);
             return req;
         }
 
         public async Task<AccountInfoResult> AccountInfo()
         {
-            var req = await new AccountInfoRequest(HttpSettings, Authenticator).MakeRequestAsync(_connectionLimiter);
+            var req = await new AccountInfoRequest(HttpSettings, Auth).MakeRequestAsync(_connectionLimiter);
             var res = req.ToAccountInfo();
             return res;
         }
 
         public async Task<PublishResult> Publish(string fullPath)
         {
-            var req = await new PublishRequest(HttpSettings, Authenticator, fullPath).MakeRequestAsync(_connectionLimiter);
+            var req = await new PublishRequest(HttpSettings, Auth, fullPath).MakeRequestAsync(_connectionLimiter);
             var res = req.ToPublishResult();
 
             if (res.IsSuccess)
@@ -302,14 +306,14 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
                 CachedSharedList.Value.Remove(item.Key);
             }
 
-            var req = await new UnpublishRequest(this, HttpSettings, Authenticator, publicLink.OriginalString).MakeRequestAsync(_connectionLimiter);
+            var req = await new UnpublishRequest(this, HttpSettings, Auth, publicLink.OriginalString).MakeRequestAsync(_connectionLimiter);
             var res = req.ToUnpublishResult();
             return res;
         }
 
         public async Task<RemoveResult> Remove(string fullPath)
         {
-            var req = await new RemoveRequest(HttpSettings, Authenticator, fullPath).MakeRequestAsync(_connectionLimiter);
+            var req = await new RemoveRequest(HttpSettings, Auth, fullPath).MakeRequestAsync(_connectionLimiter);
             var res = req.ToRemoveResult();
             return res;
         }
@@ -321,7 +325,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             //return res;
 
             string newFullPath = WebDavPath.Combine(WebDavPath.Parent(fullPath), newName);
-            var req = await new MoveRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, fullPath, newFullPath)
+            var req = await new MoveRequest(HttpSettings, Auth, ShardManager.MetaServer.Url, fullPath, newFullPath)
                 .MakeRequestAsync(_connectionLimiter);
 
             var res = req.ToRenameResult();
@@ -330,10 +334,10 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
         public Dictionary<ShardType, ShardInfo> GetShardInfo1()
         {
-            return Authenticator.IsAnonymous
+            return Auth.IsAnonymous
                 ? new WebV2.Requests
-                     .ShardInfoRequest(HttpSettings, Authenticator).MakeRequestAsync(_connectionLimiter).Result.ToShardInfo()
-                : new ShardInfoRequest(HttpSettings, Authenticator).MakeRequestAsync(_connectionLimiter).Result.ToShardInfo();
+                     .ShardInfoRequest(HttpSettings, Auth).MakeRequestAsync(_connectionLimiter).Result.ToShardInfo()
+                : new ShardInfoRequest(HttpSettings, Auth).MakeRequestAsync(_connectionLimiter).Result.ToShardInfo();
         }
 
 
@@ -360,7 +364,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
         private async Task<FolderInfoResult> GetShareListInner()
         {
-            var res = await new SharedListRequest(HttpSettings, Authenticator)
+            var res = await new SharedListRequest(HttpSettings, Auth)
                 .MakeRequestAsync(_connectionLimiter);
 
             return res;
@@ -385,7 +389,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             //return (await new CreateFolderRequest(HttpSettings, Authenticator, path).MakeRequestAsync())
             //    .ToCreateFolderResult();
 
-            return (await new CreateFolderRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, path).MakeRequestAsync(_connectionLimiter))
+            return (await new CreateFolderRequest(HttpSettings, Auth, ShardManager.MetaServer.Url, path).MakeRequestAsync(_connectionLimiter))
                 .ToCreateFolderResult();
         }
 
@@ -398,13 +402,13 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             //using Mobile request because of supporting file modified time
 
             //TODO: refact, make mixed repo
-            var req = await new MobAddFileRequest(HttpSettings, Authenticator, ShardManager.MetaServer.Url, fileFullPath, fileHash.Hash.Value, fileSize, dateTime, conflictResolver)
+            var req = await new MobAddFileRequest(HttpSettings, Auth, ShardManager.MetaServer.Url, fileFullPath, fileHash.Hash.Value, fileSize, dateTime, conflictResolver)
                 .MakeRequestAsync(_connectionLimiter);
 
             var res = req.ToAddFileResult();
             return res;
         }
 
-        public async Task<CheckUpInfo> ActiveOperationsAsync() => await Task.FromResult<CheckUpInfo>(null);
+        public async Task<CheckUpInfo> DetectOutsideChanges() => await Task.FromResult<CheckUpInfo>(null);
     }
 }

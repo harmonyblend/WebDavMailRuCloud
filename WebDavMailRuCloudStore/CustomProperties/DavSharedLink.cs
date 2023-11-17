@@ -10,5 +10,4 @@ namespace YaR.Clouds.WebDavStore.CustomProperties
 
         public override XName Name => PropertyName;
     }
-
 }

@@ -5,18 +5,17 @@ using YaR.Clouds.Base.Requests.Types;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
 {
-
    class RemoveRequest : BaseRequestJson<CommonOperationResult<string>>
     {
         private readonly string _fullPath;
 
-        public RemoveRequest(HttpCommonSettings settings, IAuth auth, string fullPath) 
+        public RemoveRequest(HttpCommonSettings settings, IAuth auth, string fullPath)
             : base(settings, auth)
         {
             _fullPath = fullPath;
         }
 
-        protected override string RelationalUri => $"/api/m1/file/remove?access_token={Auth.AccessToken}";
+        protected override string RelationalUri => $"/api/m1/file/remove?access_token={_auth.AccessToken}";
 
         protected override byte[] CreateHttpContent()
         {

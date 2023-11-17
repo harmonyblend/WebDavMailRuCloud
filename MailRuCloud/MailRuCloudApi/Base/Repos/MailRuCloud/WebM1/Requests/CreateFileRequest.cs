@@ -12,7 +12,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
         private readonly long _size;
         private readonly ConflictResolver _conflictResolver;
 
-        public CreateFileRequest(HttpCommonSettings settings, IAuth auth, string fullPath, string hash, long size, ConflictResolver? conflictResolver) 
+        public CreateFileRequest(HttpCommonSettings settings, IAuth auth, string fullPath, string hash, long size, ConflictResolver? conflictResolver)
             : base(settings, auth)
         {
             _fullPath = fullPath;
@@ -21,7 +21,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
             _conflictResolver = conflictResolver ?? ConflictResolver.Rename;
         }
 
-        protected override string RelationalUri => $"/api/m1/file/add?access_token={Auth.AccessToken}";
+        protected override string RelationalUri => $"/api/m1/file/add?access_token={_auth.AccessToken}";
 
         protected override byte[] CreateHttpContent()
         {

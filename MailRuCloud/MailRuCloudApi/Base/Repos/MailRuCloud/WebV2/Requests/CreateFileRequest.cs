@@ -12,7 +12,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         private readonly long _size;
         private readonly ConflictResolver _conflictResolver;
 
-        public CreateFileRequest(HttpCommonSettings settings, IAuth auth, string fullPath, string hash, long size, ConflictResolver? conflictResolver) 
+        public CreateFileRequest(HttpCommonSettings settings, IAuth auth, string fullPath, string hash, long size, ConflictResolver? conflictResolver)
             : base(settings, auth)
         {
             _fullPath = fullPath;
@@ -26,7 +26,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         protected override byte[] CreateHttpContent()
         {
             string filePart = $"&hash={_hash}&size={_size}";
-            string data = $"home={Uri.EscapeDataString(_fullPath)}&conflict={_conflictResolver}&api=2&token={Auth.AccessToken}" + filePart;
+            string data = $"home={Uri.EscapeDataString(_fullPath)}&conflict={_conflictResolver}&api=2&token={_auth.AccessToken}" + filePart;
 
             return Encoding.UTF8.GetBytes(data);
         }

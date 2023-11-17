@@ -26,7 +26,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
         public override async Task<SpecialCommandResult> Execute()
         {
             const string name = "FISHA.YEA";
-            string target = WebDavPath.Combine(Path, name);
+            string target = WebDavPath.Combine(_path, name);
 
             var randomHash = new byte[20];
             Random.NextBytes(randomHash);
@@ -37,7 +37,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
             {
                 //var res = await new CreateFileRequest(Cloud.CloudApi, target, strRandomHash, randomSize, ConflictResolver.Rename).MakeRequestAsync(_connectionLimiter);
                 var hash = new FileHashMrc(randomHash);
-                var res = await Cloud.RequestRepo.AddFile(target, hash, randomSize, DateTime.Now,  ConflictResolver.Rename);
+                var res = await _cloud.RequestRepo.AddFile(target, hash, randomSize, DateTime.Now,  ConflictResolver.Rename);
                 if (res.Success)
                 {
                     Logger.Warn("╔╗╔╗╔╦══╦╗╔╗╔╗╔╦╦╗");
@@ -74,7 +74,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                 if (string.IsNullOrEmpty(content))
                     content = @"Maybe next time ¯\_(ツ)_/¯";
 
-                Cloud.UploadFile(WebDavPath.Combine(Path, $"{DateTime.Now:yyyy-MM-dd hh-mm-ss} Not today, dude.txt"), content);
+                _cloud.UploadFile(WebDavPath.Combine(_path, $"{DateTime.Now:yyyy-MM-dd hh-mm-ss} Not today, dude.txt"), content);
             }
 
             return SpecialCommandResult.Success;

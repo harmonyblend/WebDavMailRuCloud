@@ -17,17 +17,17 @@ namespace YaR.Clouds.MailRuCloud.TwoFA.UI
         private const string FilenamePrefixParamName = "FilenamePrefix";
         private const string DoDeleteFileAfterName = "DoDeleteFileAfter";
 
-        public AuthCodeFile(IEnumerable<KeyValuePair<string, string>> parames)
+        public AuthCodeFile(IEnumerable<KeyValuePair<string, string>> parameters)
         {
-            var parames1 = parames.ToList();
+            var parameters1 = parameters.ToList();
 
-            _dirPath = parames1.First(p => p.Key == DirectoryParamName).Value;
+            _dirPath = parameters1.FirstOrDefault(p => p.Key == DirectoryParamName).Value;
             if (!Directory.Exists(_dirPath))
                 throw new DirectoryNotFoundException($"2FA: directory not found {_dirPath}");
 
-            _filePrefix = parames1.First(p => p.Key == FilenamePrefixParamName).Value ?? string.Empty;
+            _filePrefix = parameters1.FirstOrDefault(p => p.Key == FilenamePrefixParamName).Value ?? string.Empty;
 
-            var val = parames1.FirstOrDefault(p => p.Key == DoDeleteFileAfterName).Value;
+            var val = parameters1.FirstOrDefault(p => p.Key == DoDeleteFileAfterName).Value;
             _doDeleteFileAfter = string.IsNullOrWhiteSpace(val) || bool.Parse(val);
         }
 
@@ -47,7 +47,7 @@ namespace YaR.Clouds.MailRuCloud.TwoFA.UI
             var watcher = new FileSystemWatcher(_dirPath) { NotifyFilter = NotifyFilters.LastWrite };
             watcher.Changed += (_, args) =>
             {
-                if (!string.Equals(Path.GetFullPath(args.FullPath), Path.GetFullPath(filepath), StringComparison.OrdinalIgnoreCase)) 
+                if (!string.Equals(Path.GetFullPath(args.FullPath), Path.GetFullPath(filepath), StringComparison.OrdinalIgnoreCase))
                     return;
 
                 watcher.EnableRaisingEvents = false;
@@ -71,4 +71,3 @@ namespace YaR.Clouds.MailRuCloud.TwoFA.UI
         }
     }
 }
-

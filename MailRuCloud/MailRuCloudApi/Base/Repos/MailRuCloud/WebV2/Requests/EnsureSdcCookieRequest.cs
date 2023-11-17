@@ -5,7 +5,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
 {
     class EnsureSdcCookieRequest : BaseRequestString
     {
-        public EnsureSdcCookieRequest(HttpCommonSettings settings, IAuth auth) 
+        public EnsureSdcCookieRequest(HttpCommonSettings settings, IAuth auth)
             : base(settings, auth)
         {
         }

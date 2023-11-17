@@ -40,7 +40,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MailRuCloudApi.TwoFA.File",
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hasher", "Hasher\Hasher.csproj", "{CB339F56-A0D8-4133-B322-6894DC70FAE6}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "YandexAuthBrowser", "YandexAuthBrowser\YandexAuthBrowser.csproj", "{85766D6A-EA1E-4413-BF95-FEC07D72BA99}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BrowserAuthenticator", "BrowserAuthenticator\BrowserAuthenticator.csproj", "{85766D6A-EA1E-4413-BF95-FEC07D72BA99}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

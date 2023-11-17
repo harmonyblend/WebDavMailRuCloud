@@ -35,7 +35,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
 
     internal class ResourceUrlParams
     {
-        [JsonProperty("id")]
+        //[JsonProperty("id")]
+        // 08.07.2023 в браузере при скачивании: "idResource"
+        [JsonProperty("idResource")]
         public string Id { get; set; }
     }
 }

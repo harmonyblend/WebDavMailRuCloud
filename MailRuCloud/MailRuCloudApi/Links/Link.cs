@@ -89,6 +89,5 @@ namespace YaR.Clouds.Links
 
         public FileSize Size { get; set; }
         public DateTime CreationTimeUtc { get; set; }
-
     }
 }

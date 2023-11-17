@@ -15,14 +15,14 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public override async Task<SpecialCommandResult> Execute()
         {
-            string path = Parames[0].Replace("\\", WebDavPath.Separator);
+            string path = _parameters[0].Replace("\\", WebDavPath.Separator);
 
-            if (await Cloud.GetItemAsync(path) is not File entry)
+            if (await _cloud.GetItemAsync(path) is not File entry)
                 return SpecialCommandResult.Fail;
 
             //var auth = await new OAuthRequest(Cloud.CloudApi).MakeRequestAsync(_connectionLimiter);
 
-            bool removed = await Cloud.Remove(entry, false);
+            bool removed = await _cloud.Remove(entry, false);
             if (removed)
             {
                 //var addreq = await new MobAddFileRequest(Cloud.CloudApi, entry.FullPath, entry.Hash, entry.Size, new DateTime(2010, 1, 1), ConflictResolver.Rename)

@@ -53,7 +53,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
                 _ => TimeSpan.FromSeconds(ShardsExpiresInSec));
 
 
-            WeblinkDownloadServersPending = new Pending<Cached<ServerRequestResult>>(8,
+            WebLinkDownloadServersPending = new Pending<Cached<ServerRequestResult>>(8,
                 () => new Cached<ServerRequestResult>(_ =>
                     {
                         var data = new WeblinkGetServerRequest(httpsettings).MakeRequestAsync(connectionLimiter).Result;
@@ -68,7 +68,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
 
         public Pending<Cached<ServerRequestResult>> DownloadServersPending { get; }
-        public Pending<Cached<ServerRequestResult>> WeblinkDownloadServersPending { get; }
+        public Pending<Cached<ServerRequestResult>> WebLinkDownloadServersPending { get; }
 
         public ShardInfo MetaServer => new() {Url = _metaServer.Value.Url, Count = _metaServer.Value.Unknown};
         private readonly Cached<ServerRequestResult> _metaServer;

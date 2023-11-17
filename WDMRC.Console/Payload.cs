@@ -10,6 +10,7 @@ using NWebDav.Server.Http;
 using NWebDav.Server.HttpListener;
 using NWebDav.Server.Locking;
 using NWebDav.Server.Logging;
+using YaR.Clouds.Extensions;
 using YaR.Clouds.WebDavStore;
 using YaR.Clouds.WebDavStore.StoreBase;
 using RequestHandlerFactory = YaR.Clouds.WebDavStore.RequestHandlerFactory;
@@ -26,7 +27,7 @@ namespace YaR.Clouds.Console
         {
             CancelToken.Cancel(false);
         }
-        
+
         public static void Run(CommandLineOptions options)
         {
             // trying to fix "infinite recursion during resource lookup with system.private.corelib"
@@ -62,6 +63,8 @@ namespace YaR.Clouds.Console
 
                 DisableLinkManager = options.DisableLinkManager,
 
+                CloudInstanceTimeoutMinutes = options.CloudInstanceTimeoutMinutes,
+
                 Wait100ContinueTimeoutSec = options.Wait100ContinueTimeoutSec,
                 WaitResponseTimeoutSec = options.WaitResponseTimeoutSec,
                 ReadWriteTimeoutSec = options.ReadWriteTimeoutSec,
@@ -77,34 +80,41 @@ namespace YaR.Clouds.Console
 
             var httpListener = new HttpListener();
             var httpListenerOptions = new HttpListenerOptions(options);
-	        try
-	        {
-		        foreach (var prefix in httpListenerOptions.Prefixes)
-			        httpListener.Prefixes.Add(prefix);
-		        httpListener.AuthenticationSchemes = httpListenerOptions.AuthenticationScheme;
-		        httpListener.Start();
+            try
+            {
+                foreach (var prefix in httpListenerOptions.Prefixes)
+                    httpListener.Prefixes.Add(prefix);
+                httpListener.AuthenticationSchemes = httpListenerOptions.AuthenticationScheme;
+                httpListener.Start();
 
                 Logger.Info(
                     $"WebDAV server running at {httpListenerOptions.Prefixes.Aggregate(
                         (current, next) => string.Concat(current, ", ", next))}");
 
-		        // Start dispatching requests
-		        var t = DispatchHttpRequestsAsync(httpListener, options.MaxThreadCount);
-		        t.Wait(CancelToken.Token);
+                // Start dispatching requests
+                var t = DispatchHttpRequestsAsync(httpListener, options.MaxThreadCount);
+                t.Wait(CancelToken.Token);
 
-		        //do not use console input - it uses 100% CPU when running mono-service in ubuntu
-	        }
-	        catch (OperationCanceledException ce) when (ce.CancellationToken.IsCancellationRequested)
-	        {
-		        Logger.Info("Cancelled");
-	        }
+                //do not use console input - it uses 100% CPU when running mono-service in ubuntu
+            }
+            catch (OperationCanceledException ce) when (ce.CancellationToken.IsCancellationRequested)
+            {
+                Logger.Info("Cancelled");
+            }
+            catch (HttpListenerException e) when (e.Message.ContainsIgnoreCase("conflicts with an existing"))
+            {
+                // System.Net.HttpListenerException: 'Failed to listen on prefix 'http://127.0.0.1:12345/'
+                // because it conflicts with an existing registration on the machine.'
+                Logger.Error(e.Message);
+            }
             finally
             {
                 httpListener.Stop();
             }
         }
 
-        private const string DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
+        private const string DefaultUserAgent =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36";
         private static string ConstructUserAgent(string fromOptions, string fromConfig)
         {
             if (!string.IsNullOrWhiteSpace(fromOptions))
@@ -131,7 +141,7 @@ namespace YaR.Clouds.Console
 
         private static ITwoFaHandler LoadHandler(TwoFactorAuthHandlerInfo handlerInfo)
         {
-            if (string.IsNullOrEmpty(handlerInfo.Name)) 
+            if (string.IsNullOrEmpty(handlerInfo.Name))
                 return null;
 
             var twoFaHandler = TwoFaHandlers.Get(handlerInfo);
@@ -148,7 +158,7 @@ namespace YaR.Clouds.Console
 
             // Create WebDAV dispatcher
             var homeFolder = new LocalStore(
-                isEnabledPropFunc: Config.IsEnabledWebDAVProperty, 
+                isEnabledPropFunc: Config.IsEnabledWebDAVProperty,
                 lockingManager: CloudManager.Settings.UseLocks ? new InMemoryLockingManager() : new EmptyLockingManager());
             var webDavDispatcher = new WebDavDispatcher(homeFolder, requestHandlerFactory);
 
@@ -220,6 +230,7 @@ namespace YaR.Clouds.Console
             Logger.Info($"Cloud download/upload timeout: {options.ReadWriteTimeoutSec} sec");
             Logger.Info($"Wait for 100-Continue timeout: {options.Wait100ContinueTimeoutSec} sec");
             Logger.Info($"Cloud & protocol: defined by login and the rest parameters");
+            Logger.Info($"Cloud instance (server+login) expiration timeout: {options.CloudInstanceTimeoutMinutes} min");
             Logger.Info($"Folder cache expiration timeout: {options.CacheListingSec} sec");
             Logger.Info($"List query folder depth: {options.CacheListingDepth}");
             Logger.Info($"Use locks: {options.UseLocks}");

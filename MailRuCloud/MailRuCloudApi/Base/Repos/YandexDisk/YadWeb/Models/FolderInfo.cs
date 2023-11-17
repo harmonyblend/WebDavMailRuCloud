@@ -15,18 +15,30 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         }
 
         public string Path { get; set; }
+        /// <summary>
+        /// <para>0 - сортировка возвращаемого результата по убыванию.</para>
+        /// <para>1 - сортировка возвращаемого результата по возрастанию.</para>
+        /// </summary>
         public int Order { get; set; } = 1;
+        /// <summary>
+        /// <para>Поле сортировки возвращаемого результата.</para>
+        /// <para>name - по названию файла.</para>
+        /// <para>mtime - по времени изменения.</para>
+        /// <para>size - по размеру.</para>
+        /// <para>type - по типу.</para>
+        /// </summary>
         public string SortBy { get; set; } = "name";
         public int Offset { get; set; } = 0;
         public int Amount { get; set; } = int.MaxValue;
+        public bool WithParent { get; set; } = false;
 
         public override IEnumerable<KeyValuePair<string, string>> ToKvp(int index)
         {
             foreach (var pair in base.ToKvp(index))
                 yield return pair;
-            
+
             yield return new KeyValuePair<string, string>($"idContext.{index}", WebDavPath.Combine(_pathPrefix, Path));
-            
+
             //if (Path == "/Camera")
             //{
             //    yield return new KeyValuePair<string, string>($"idContext.{index}", "/photounlim/");
@@ -40,6 +52,8 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
             yield return new KeyValuePair<string, string>($"sort.{index}", SortBy);
             yield return new KeyValuePair<string, string>($"offset.{index}", Offset.ToString());
             yield return new KeyValuePair<string, string>($"amount.{index}", Amount.ToString());
+            if (WithParent)
+                yield return new KeyValuePair<string, string>($"withParent.{index}", "1");
         }
     }
 
@@ -91,13 +105,13 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         public string Mimetype { get; set; }
 
         [JsonProperty("drweb", NullValueHandling = NullValueHandling.Ignore)]
-        public long? Drweb { get; set; }
+        public long? DrWeb { get; set; }
 
         [JsonProperty("sizes", NullValueHandling = NullValueHandling.Ignore)]
         public List<Size> Sizes { get; set; }
 
         [JsonProperty("mediatype", NullValueHandling = NullValueHandling.Ignore)]
-        public string Mediatype { get; set; }
+        public string MediaType { get; set; }
 
         [JsonProperty("etime", NullValueHandling = NullValueHandling.Ignore)]
         public long? Etime { get; set; }
@@ -113,6 +127,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
 
         [JsonProperty("short_url")]
         public string UrlShort { get; set; }
+
+        [JsonProperty("total_results_count")]
+        public int? TotalEntityCount { get; set; }
     }
 
     class Size

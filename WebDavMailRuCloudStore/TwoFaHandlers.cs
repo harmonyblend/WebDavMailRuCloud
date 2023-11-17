@@ -10,7 +10,7 @@ namespace YaR.Clouds.WebDavStore
     {
         public string Name { get; set; }
 
-        public IEnumerable<KeyValuePair<string, string>> Parames { get; set; }
+        public IEnumerable<KeyValuePair<string, string>> Parameters { get; set; }
     }
 
     public static class TwoFaHandlers
@@ -33,13 +33,13 @@ namespace YaR.Clouds.WebDavStore
             ITwoFaHandler inst = null;
             try
             {
-                inst = (ITwoFaHandler)Activator.CreateInstance(type, handlerInfo.Parames);
+                inst = (ITwoFaHandler)Activator.CreateInstance(type, handlerInfo.Parameters);
             }
             catch (Exception e)
             {
                 Logger.Error($"Cannot create instance of 2FA handler {handlerInfo.Name}. {e}");
             }
-            
+
             return inst;
         }
 
@@ -55,8 +55,8 @@ namespace YaR.Clouds.WebDavStore
             {
                 try
                 {
-                    //If an application has been copied from the web, it is flagged by Windows as being a web application, even if it resides on the local computer. 
-                    //You can change that designation by changing the file properties, or you can use the element to grant the assembly full trust. 
+                    //If an application has been copied from the web, it is flagged by Windows as being a web application, even if it resides on the local computer.
+                    //You can change that designation by changing the file properties, or you can use the element to grant the assembly full trust.
                     //As an alternative, you can use the UnsafeLoadFrom method to load a local assembly that the operating system has flagged as having been loaded from the web.
                     Assembly assembly = Assembly.UnsafeLoadFrom(file);
 

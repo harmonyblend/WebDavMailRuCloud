@@ -18,7 +18,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
 
         protected override byte[] CreateHttpContent()
         {
-            var data = $"client_id={Settings.ClientId}&grant_type=refresh_token&refresh_token={_refreshToken}";
+            var data = $"client_id={_settings.ClientId}&grant_type=refresh_token&refresh_token={_refreshToken}";
             return Encoding.UTF8.GetBytes(data);
         }
 
@@ -26,7 +26,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
         {
             var request = base.CreateRequest(baseDomain);
             request.Host = request.RequestUri.Host;
-            request.UserAgent = Settings.UserAgent;
+            request.UserAgent = _settings.UserAgent;
             request.Accept = "*/*";
             request.ServicePoint.Expect100Continue = false;
 

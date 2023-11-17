@@ -19,7 +19,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         public long Uid { get; set; }
 
         [JsonProperty("filesize_limit")]
-        public long FilesizeLimit { get; set; }
+        public long FileSizeLimit { get; set; }
 
         [JsonProperty("free")]
         public long Free { get; set; }

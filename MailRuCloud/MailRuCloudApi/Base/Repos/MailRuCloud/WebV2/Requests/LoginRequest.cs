@@ -10,7 +10,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
 {
     class LoginRequest : BaseRequestString<LoginResult>
     {
-        public LoginRequest(HttpCommonSettings settings, IAuth auth) 
+        public LoginRequest(HttpCommonSettings settings, IAuth auth)
             : base(settings, auth)
         {
         }
@@ -27,7 +27,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         protected override byte[] CreateHttpContent()
         {
 #pragma warning disable SYSLIB0013 // Type or member is obsolete
-            string data = $"Login={Uri.EscapeUriString(Auth.Login)}&Domain={CommonSettings.Domain}&Password={Uri.EscapeUriString(Auth.Password)}";
+            string data = $"Login={Uri.EscapeUriString(_auth.Login)}&Domain={CommonSettings.Domain}&Password={Uri.EscapeUriString(_auth.Password)}";
 #pragma warning restore SYSLIB0013 // Type or member is obsolete
 
             return Encoding.UTF8.GetBytes(data);

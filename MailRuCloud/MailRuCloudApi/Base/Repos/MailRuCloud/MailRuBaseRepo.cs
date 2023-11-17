@@ -15,13 +15,13 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(MailRuBaseRepo));
 
-        public static readonly string[] AvailDomains = {"mail", "inbox", "bk", "list"};
+        public static readonly string[] AvailDomains = {"mail", "inbox", "bk", "list", "vk", "internet"};
 
         protected MailRuBaseRepo(IBasicCredentials credentials)
         {
             Credentials = credentials;
 
-            if (AvailDomains.Any(d => credentials.Login.Contains($"@{d}."))) 
+            if (AvailDomains.Any(d => credentials.Login.Contains($"@{d}.")))
                 return;
 
             string domains = AvailDomains.Aggregate((c, n) => c + ", @" + n);
@@ -30,7 +30,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
         protected readonly IBasicCredentials Credentials;
 
-        public IAuth Authenticator { get; protected set; }
+        public IAuth Auth { get; protected set; }
         public abstract HttpCommonSettings HttpSettings { get; }
 
         public abstract Task<ShardInfo> GetShardInfo(ShardType shardType);
@@ -56,7 +56,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
         private HttpRequestMessage UploadClientRequest(PushStreamContent content, File file)
         {
             var shard = GetShardInfo(ShardType.Upload).Result;
-            var url = new Uri($"{shard.Url}?token={Authenticator.AccessToken}");  //cloud_domain=2&x-email={Authenticator.Login.Replace("@", "%40")}&
+            var url = new Uri($"{shard.Url}?token={Auth.AccessToken}");  //cloud_domain=2&x-email={Authenticator.Login.Replace("@", "%40")}&
 
             var request = new HttpRequestMessage
             {
@@ -66,7 +66,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             request.Headers.TryAddWithoutValidation("User-Agent", HttpSettings.UserAgent);
 
             //request.Headers.Add("Host", url.Host);
-            //request.Headers.Add("Connection", "keep-alive"); 
+            //request.Headers.Add("Connection", "keep-alive");
             //request.Headers.Add("X-Requested-With", "XMLHttpRequest");
             //request.Headers.Add("Accept", "*/*");
             //request.Headers.Add("Origin", "https://cloud.mail.ru");
@@ -105,6 +105,6 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             "https:/cloud.mail.ru/public"  //TODO: may be obsolete?
         };
 
-        public string PublicBaseUrlDefault => PublicBaseUrls.First();
+        public string PublicBaseUrlDefault => PublicBaseUrls.FirstOrDefault();
     }
 }

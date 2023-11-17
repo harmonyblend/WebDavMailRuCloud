@@ -11,16 +11,31 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 {
     class YadWebAuth : IAuth
     {
-        public YadWebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings, IBasicCredentials credentials)
+        private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(YadWebAuth));
+
+        public YadWebAuth(SemaphoreSlim connectionLimiter, HttpCommonSettings settings, Credentials credentials)
         {
             _settings = settings;
-            _creds = credentials;
-            Cookies = new CookieContainer();
+            Credentials = credentials;
 
-            var _ = MakeLogin(connectionLimiter).Result;
+            if (credentials?.Cookies?.Count > 0 &&
+                !string.IsNullOrEmpty(credentials.Sk) &&
+                !string.IsNullOrEmpty(credentials.Uuid))
+            {
+                Cookies = credentials.Cookies;
+                Uuid = credentials.Uuid;
+                DiskSk = credentials.Sk;
+            }
+            else
+            {
+                Cookies = new CookieContainer();
+
+                var _ = MakeLogin(connectionLimiter).Result;
+            }
         }
 
-        private readonly IBasicCredentials _creds;
+        public Credentials Credentials { get; }
+
         private readonly HttpCommonSettings _settings;
 
         public async Task<bool> MakeLogin(SemaphoreSlim connectionLimiter)
@@ -64,8 +79,8 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             return true;
         }
 
-        public string Login => _creds.Login;
-        public string Password => _creds.Password;
+        public string Login => Credentials.Login;
+        public string Password => Credentials.Password;
         public string DiskSk { get; set; }
         public string Uuid { get; set; }
 

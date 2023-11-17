@@ -24,7 +24,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
             {
                 new("username", _login),
                 new("password", _password),
-                new("client_id", Settings.ClientId),
+                new("client_id", _settings.ClientId),
                 new("grant_type", "password")
             };
             return new FormUrlEncodedContent(keyValues).ReadAsByteArrayAsync().Result;

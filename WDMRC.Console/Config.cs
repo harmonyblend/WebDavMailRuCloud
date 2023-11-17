@@ -87,15 +87,15 @@ namespace YaR.Clouds.Console
 
                 var node = Document.SelectSingleNode("/config/TwoFactorAuthHandler");
                 info.Name = node.Attributes["Name"].InnerText;
-                var parames = new List<KeyValuePair<string, string>>();
+                var parameters = new List<KeyValuePair<string, string>>();
                 foreach (XmlNode childNode in node.ChildNodes)
                 {
                     string pname = childNode.Attributes["Name"].InnerText;
                     string pvalue = childNode.Attributes["Value"].InnerText;
-                    parames.Add(new KeyValuePair<string, string>(pname, pvalue));
+                    parameters.Add(new KeyValuePair<string, string>(pname, pvalue));
                 }
 
-                info.Parames = parames;
+                info.Parameters = parameters;
 
 
                 return info;

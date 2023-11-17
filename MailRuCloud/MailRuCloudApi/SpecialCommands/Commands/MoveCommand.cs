@@ -15,14 +15,14 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public override async Task<SpecialCommandResult> Execute()
         {
-            string source = WebDavPath.Clean(Parames.Count == 1 ? Path : Parames[0]);
-            string target = WebDavPath.Clean(Parames.Count == 1 ? Parames[0] : Parames[1]);
+            string source = WebDavPath.Clean(_parameters.Count == 1 ? _path : _parameters[0]);
+            string target = WebDavPath.Clean(_parameters.Count == 1 ? _parameters[0] : _parameters[1]);
 
-            var entry = await Cloud.GetItemAsync(source);
+            var entry = await _cloud.GetItemAsync(source);
             if (entry is null)
                 return SpecialCommandResult.Fail;
 
-            var res = await Cloud.MoveAsync(entry, target);
+            var res = await _cloud.MoveAsync(entry, target);
             return new SpecialCommandResult(res);
         }
     }

@@ -9,13 +9,13 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
     {
         private readonly string _fullPath;
 
-        public CreateFolderRequest(HttpCommonSettings settings, IAuth auth, string fullPath) 
+        public CreateFolderRequest(HttpCommonSettings settings, IAuth auth, string fullPath)
             : base(settings, auth)
         {
             _fullPath = fullPath;
         }
 
-        protected override string RelationalUri => $"/api/m1/folder/add?access_token={Auth.AccessToken}";
+        protected override string RelationalUri => $"/api/m1/folder/add?access_token={_auth.AccessToken}";
 
         protected override byte[] CreateHttpContent()
         {

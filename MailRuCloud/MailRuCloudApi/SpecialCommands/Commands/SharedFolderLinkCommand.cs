@@ -30,28 +30,30 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public override async Task<SpecialCommandResult> Execute()
         {
-            var m = s_commandRegex.Match(Parames[0]);
+            var m = s_commandRegex.Match(_parameters[0]);
 
             if (!m.Success) return SpecialCommandResult.Fail;
 
+            var publicBaseUrl = _cloud.RequestRepo.PublicBaseUrlDefault;
             var url = new Uri(m.Groups["url"].Value, UriKind.RelativeOrAbsolute);
             if (!url.IsAbsoluteUri)
-                url = new Uri(Cloud.Repo.PublicBaseUrlDefault + m.Groups["url"].Value, UriKind.Absolute);
+                url = new Uri(publicBaseUrl + m.Groups["url"].Value, UriKind.Absolute);
 
             //TODO: make method in MailRuCloud to get entry by url
             //var item = await new ItemInfoRequest(Cloud.CloudApi, m.Groups["url"].Value, true).MakeRequestAsync(_connectionLimiter);
-            var item = await Cloud.RequestRepo.ItemInfo(RemotePath.Get(new Link(url)) );
-            var entry = item.ToEntry(Cloud.Repo.PublicBaseUrlDefault);
+
+            var item = await _cloud.RequestRepo.ItemInfo(RemotePath.Get(new Link(url)));
+            var entry = item.ToEntry(publicBaseUrl);
             if (entry is null)
                 return SpecialCommandResult.Fail;
 
-            string name = Parames.Count > 1 && !string.IsNullOrWhiteSpace(Parames[1])
-                    ? Parames[1]
+            string name = _parameters.Count > 1 && !string.IsNullOrWhiteSpace(_parameters[1])
+                    ? _parameters[1]
                     : entry.Name;
 
-            var res = await Cloud.LinkItem(
+            var res = await _cloud.LinkItem(
                 url,
-                Path, name, entry.IsFile, entry.Size, entry.CreationTimeUtc);
+                _path, name, entry.IsFile, entry.Size, entry.CreationTimeUtc);
 
             return new SpecialCommandResult(res);
         }

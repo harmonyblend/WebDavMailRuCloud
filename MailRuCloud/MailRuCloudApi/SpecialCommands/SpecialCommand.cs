@@ -6,24 +6,24 @@ namespace YaR.Clouds.SpecialCommands
 {
     public abstract class SpecialCommand
     {
-        protected readonly Cloud Cloud;
-        protected readonly string Path;
-        protected readonly IList<string> Parames;
+        protected readonly Cloud _cloud;
+        protected readonly string _path;
+        protected readonly IList<string> _parameters;
 
         protected abstract MinMax<int> MinMaxParamsCount { get; }
 
-        protected SpecialCommand(Cloud cloud, string path, IList<string> parames)
+        protected SpecialCommand(Cloud cloud, string path, IList<string> parameters)
         {
-            Cloud = cloud;
-            Path = path;
-            Parames = parames;
+            _cloud = cloud;
+            _path = path;
+            _parameters = parameters;
 
             CheckParams();
         }
 
         public virtual Task<SpecialCommandResult> Execute()
         {
-            if (Parames.Count < MinMaxParamsCount.Min || Parames.Count > MinMaxParamsCount.Max)
+            if (_parameters.Count < MinMaxParamsCount.Min || _parameters.Count > MinMaxParamsCount.Max)
                 return Task.FromResult(SpecialCommandResult.Fail);
 
             return Task.FromResult(SpecialCommandResult.Success);
@@ -31,7 +31,7 @@ namespace YaR.Clouds.SpecialCommands
 
         private void CheckParams()
         {
-            if (Parames.Count < MinMaxParamsCount.Min || Parames.Count > MinMaxParamsCount.Max)
+            if (_parameters.Count < MinMaxParamsCount.Min || _parameters.Count > MinMaxParamsCount.Max)
                 throw new ArgumentException("Invalid parameters count");
         }
 

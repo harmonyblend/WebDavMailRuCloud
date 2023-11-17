@@ -59,7 +59,7 @@ namespace YaR.Clouds.Base.Streams
         {
             var totalLength = Length;
             long glostart = _start ?? 0;
-            long gloend = _end == null || 
+            long gloend = _end == null ||
                 _start == _end && _end == 0 ? totalLength : _end.Value + 1;
 
             long fileStart = 0;
@@ -74,7 +74,7 @@ namespace YaR.Clouds.Base.Streams
                     fileStart += file.OriginalSize;
                     continue;
                 }
-                
+
                 long clostart = Math.Max(0, glostart - fileStart);
                 long cloend = gloend - fileStart - 1;
 

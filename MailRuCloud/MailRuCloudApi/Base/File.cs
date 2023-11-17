@@ -28,7 +28,7 @@ namespace YaR.Clouds.Base
             _hash = hash;
         }
 
-        public File(string fullPath, long size, params PublicLinkInfo[] links) 
+        public File(string fullPath, long size, params PublicLinkInfo[] links)
             : this(fullPath, size)
         {
             foreach (var link in links)
@@ -149,7 +149,7 @@ namespace YaR.Clouds.Base
         public IEnumerable<PublicLinkInfo> GetPublicLinks(Cloud cloud)
         {
             return PublicLinks.IsEmpty
-                ? cloud.GetSharedLinks(FullPath) 
+                ? cloud.GetSharedLinks(FullPath)
                 : PublicLinks.Values;
         }
 
@@ -191,7 +191,7 @@ namespace YaR.Clouds.Base
         public void SetPath(string fullPath)
         {
             FullPath = WebDavPath.Combine(fullPath, Name);
-            if (Parts.Count <= 1) 
+            if (Parts.Count <= 1)
                 return;
 
             foreach (var fiFile in Parts)
@@ -225,8 +225,8 @@ namespace YaR.Clouds.Base
                         Path = innerFile.FullPath,
                         Urls =  innerFile.PublicLinks.Select(pli => pli.Value.Uri).ToList(),
                         PlayListUrl = !isSplitted || cnt > 0
-                                          ? generateDirectVideoLink 
-                                                ? ConvertToVideoLink(cloud, innerFile.PublicLinks.Values.FirstOrDefault()?.Uri, videoResolution)
+                                          ? generateDirectVideoLink
+                                                ? File.ConvertToVideoLink(cloud, innerFile.PublicLinks.Values.FirstOrDefault()?.Uri, videoResolution)
                                                 : null
                                           : null
                     });
@@ -239,12 +239,11 @@ namespace YaR.Clouds.Base
         private static string ConvertToVideoLink(Cloud cloud, Uri publicLink, SharedVideoResolution videoResolution)
         {
             return cloud.RequestRepo.ConvertToVideoLink(publicLink, videoResolution);
-                       
-                       
-                   //    GetShardInfo(ShardType.WeblinkVideo).Result.Url +
-                   //videoResolution.ToEnumMemberValue() + "/" + //"0p/" +
-                   //Base64Encode(publicLink.TrimStart('/')) +
-                   //".m3u8?double_encode=1";
+
+            //    GetShardInfo(ShardType.WeblinkVideo).Result.Url +
+            //videoResolution.ToEnumMemberValue() + "/" + //"0p/" +
+            //Base64Encode(publicLink.TrimStart('/')) +
+            //".m3u8?double_encode=1";
         }
     }
 }

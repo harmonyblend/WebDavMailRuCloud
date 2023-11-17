@@ -15,7 +15,8 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
             _createdModels = createdModels;
         }
 
-        public override List<YadResponseModel> ReadJson(JsonReader reader, Type objectType, List<YadResponseModel> existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override List<YadResponseModel> ReadJson(JsonReader reader, Type objectType,
+            List<YadResponseModel> existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             var token = JToken.Load(reader);
 

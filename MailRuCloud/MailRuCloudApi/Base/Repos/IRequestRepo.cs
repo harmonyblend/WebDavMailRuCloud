@@ -12,11 +12,11 @@ namespace YaR.Clouds.Base.Repos
 {
     public interface IRequestRepo
     {
-        IAuth Authenticator { get; }
+        IAuth Auth { get; }
         HttpCommonSettings HttpSettings { get; }
 
 
-        Task<CheckUpInfo> ActiveOperationsAsync();
+        Task<CheckUpInfo> DetectOutsideChanges();
 
         Stream GetDownloadStream(File file, long? start = null, long? end = null);
 

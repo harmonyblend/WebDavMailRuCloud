@@ -5,7 +5,6 @@ using System.Net.Http;
 using YaR.Clouds.Base.Requests.Types;
 using YaR.Clouds.Extensions;
 using YaR.Clouds.Links;
-using YaR.Clouds.Common;
 using System.Collections.Immutable;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud
@@ -85,19 +84,19 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
             return res;
         }
 
-        //TODO: move to repo 
+        //TODO: move to repo
         public static UploadFileResult ToUploadPathResult(this HttpResponseMessage response)
         {
             var res = new UploadFileResult { HttpStatusCode = response.StatusCode, HasReturnedData = false };
 
-            if (!response.IsSuccessStatusCode) 
+            if (!response.IsSuccessStatusCode)
                 return res;
 
             var strres = response.Content.ReadAsStringAsync().Result;
 
             if (string.IsNullOrEmpty(strres))
                 return res;
-                
+
             res.HasReturnedData = true;
 
             var resp = strres.Split(';');
@@ -162,7 +161,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
         {
             var dict = new Dictionary<ShardType, ShardInfo>
             {
-                {ShardType.Video,             new ShardInfo{Type = ShardType.Video,       Url = webdata.Body.Video[0].Url} },    
+                {ShardType.Video,             new ShardInfo{Type = ShardType.Video,       Url = webdata.Body.Video[0].Url} },
                 {ShardType.ViewDirect,        new ShardInfo{Type = ShardType.ViewDirect,  Url = webdata.Body.ViewDirect[0].Url} },
                 {ShardType.WeblinkView,       new ShardInfo{Type = ShardType.WeblinkView, Url = webdata.Body.WeblinkView[0].Url} },
                 {ShardType.WeblinkVideo,      new ShardInfo{Type = ShardType.WeblinkVideo, Url = webdata.Body.WeblinkVideo[0].Url} },
@@ -297,7 +296,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud
 
             var groupedFile = z?.ToGroupedFiles();
 
-            var res = groupedFile?.First(it => string.IsNullOrEmpty(cmpName) || it.Name == cmpName);
+            var res = groupedFile?.FirstOrDefault(it => string.IsNullOrEmpty(cmpName) || it.Name == cmpName);
 
             return res;
         }

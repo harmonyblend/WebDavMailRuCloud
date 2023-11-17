@@ -49,7 +49,7 @@
 
 //    //                var guid = Guid.NewGuid();
 //    //                var content = new MultipartFormDataContent($"----{guid}");
-//    //                var boundaryValue = content.Headers.ContentType.Parameters.First(p => p.Name == "boundary");
+//    //                var boundaryValue = content.Headers.ContentType.Parameters.FirstOrDefault(p => p.Name == "boundary");
 //    //                boundaryValue.Value = boundaryValue.Value.Replace("\"", String.Empty);
 
 //    //                _pushContent = new PushStreamContent((stream, httpContent, arg3) =>

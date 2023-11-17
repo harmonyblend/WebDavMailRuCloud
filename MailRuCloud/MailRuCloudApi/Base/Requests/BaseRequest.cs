@@ -15,13 +15,13 @@ namespace YaR.Clouds.Base.Requests
     {
         private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(BaseRequest<TConvert, T>));
 
-        protected readonly HttpCommonSettings Settings;
-        protected readonly IAuth Auth;
+        protected readonly HttpCommonSettings _settings;
+        protected readonly IAuth _auth;
 
         protected BaseRequest(HttpCommonSettings settings, IAuth auth)
         {
-            Settings = settings;
-            Auth = auth;
+            _settings = settings;
+            _auth = auth;
         }
 
         protected abstract string RelationalUri { get; }
@@ -40,15 +40,15 @@ namespace YaR.Clouds.Base.Requests
             var request = WebRequest.CreateHttp(uriz);
 #pragma warning restore SYSLIB0014 // Type or member is obsolete
             request.Host = uriz.Host;
-            request.Proxy = Settings.Proxy;
-            request.CookieContainer = Auth?.Cookies;
+            request.Proxy = _settings.Proxy;
+            request.CookieContainer = _auth?.Cookies;
             request.Method = "GET";
             request.ContentType = ConstSettings.DefaultRequestType;
             request.Accept = "application/json";
-            request.UserAgent = Settings.UserAgent;
-            request.ContinueTimeout = Settings.CloudSettings.Wait100ContinueTimeoutSec * 1000;
-            request.Timeout = Settings.CloudSettings.WaitResponseTimeoutSec * 1000;
-            request.ReadWriteTimeout = Settings.CloudSettings.ReadWriteTimeoutSec * 1000;
+            request.UserAgent = _settings.UserAgent;
+            request.ContinueTimeout = _settings.CloudSettings.Wait100ContinueTimeoutSec * 1000;
+            request.Timeout = _settings.CloudSettings.WaitResponseTimeoutSec * 1000;
+            request.ReadWriteTimeout = _settings.CloudSettings.ReadWriteTimeoutSec * 1000;
             request.AllowWriteStreamBuffering = false;
             request.AllowReadStreamBuffering = true;
             request.SendChunked = false;
@@ -131,7 +131,7 @@ namespace YaR.Clouds.Base.Requests
                              *      System.Text.Encoding.UTF8.GetString(requestContent)
                              */
 #if NET48
-                        await requestStream.WriteAsync(requestContent, 0, requestContent.Length).ConfigureAwait(false);
+                            await requestStream.WriteAsync(requestContent, 0, requestContent.Length).ConfigureAwait(false);
 #else
                             await requestStream.WriteAsync(requestContent).ConfigureAwait(false);
 #endif
@@ -198,7 +198,7 @@ namespace YaR.Clouds.Base.Requests
 #if DEBUG
                             Logger.Warn(msg);
 #else
-                        Logger.Debug(msg);
+                            Logger.Debug(msg);
 #endif
                             throw;
                         }
@@ -209,7 +209,7 @@ namespace YaR.Clouds.Base.Requests
 #if DEBUG
                             Logger.Warn(msg);
 #else
-                        Logger.Debug(msg);
+                            Logger.Debug(msg);
 #endif
                         }
                     }
@@ -222,7 +222,7 @@ namespace YaR.Clouds.Base.Requests
                          * т.к. от другого компьютера за требуемое время не получен нужный отклик,
                          * или было разорвано уже установленное соединение из-за неверного отклика
                          * уже подключенного компьютера.
-                         * 
+                         *
                          * Возможно превышено максимальное количество подключений к серверу.
                          * Просто повторяем запрос после небольшого ожидания.
                          */
@@ -232,7 +232,7 @@ namespace YaR.Clouds.Base.Requests
 #if DEBUG
                             Logger.Warn(msg);
 #else
-                        Logger.Debug(msg);
+                            Logger.Debug(msg);
 #endif
                             throw;
                         }
@@ -245,7 +245,7 @@ namespace YaR.Clouds.Base.Requests
 #if DEBUG
                             Logger.Warn(msg);
 #else
-                        Logger.Debug(msg);
+                            Logger.Debug(msg);
 #endif
                             Thread.Sleep(TimeSpan.FromSeconds(2));
                         }

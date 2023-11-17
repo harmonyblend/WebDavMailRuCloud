@@ -117,7 +117,7 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
                 errors.AddResult(newBaseUri, copyResult.Result);
             }
 
-            //do not copy recursively 
+            //do not copy recursively
         }
     }
 }

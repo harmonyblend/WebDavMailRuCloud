@@ -30,17 +30,17 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         public JoinCommand(Cloud cloud, string path, IList<string> parameters): base(cloud, path, parameters)
         {
-            var m = s_commandRegex.Match(Parames[0]);
+            var m = s_commandRegex.Match(_parameters[0]);
 
             if (m.Success) //join by shared link
-                _func = () => ExecuteByLink(Path, m.Groups["data"].Value);
+                _func = () => ExecuteByLink(_path, m.Groups["data"].Value);
             else
             {
-                var mhash = s_hashRegex.Match(Parames[0]);
-                var msize = s_sizeRegex.Match(Parames[1]);
-                if (mhash.Success && msize.Success && Parames.Count == 3) //join by hash and size
+                var mhash = s_hashRegex.Match(_parameters[0]);
+                var msize = s_sizeRegex.Match(_parameters[1]);
+                if (mhash.Success && msize.Success && _parameters.Count == 3) //join by hash and size
                 {
-                    _func = () => ExecuteByHash(Path, mhash.Groups["data"].Value, long.Parse(Parames[1]), Parames[2]);
+                    _func = () => ExecuteByHash(_path, mhash.Groups["data"].Value, long.Parse(_parameters[1]), _parameters[2]);
                 }
             }
         }
@@ -58,7 +58,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
 
         private async Task<SpecialCommandResult> ExecuteByLink(string path, string link)
         {
-            var k = await Cloud.CloneItem(path, link);
+            var k = await _cloud.CloneItem(path, link);
             return new SpecialCommandResult(k.IsSuccess);
         }
 
@@ -69,7 +69,7 @@ namespace YaR.Clouds.SpecialCommands.Commands
                 : WebDavPath.Combine(path, paramPath);
 
             //TODO: now mail.ru only
-            var k = await Cloud.AddFile(new FileHashMrc(hash), fpath, size, ConflictResolver.Rename);
+            var k = await _cloud.AddFile(new FileHashMrc(hash), fpath, size, ConflictResolver.Rename);
             return new SpecialCommandResult(k.Success);
         }
     }

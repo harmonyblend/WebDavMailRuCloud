@@ -9,7 +9,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         private readonly string _fromUrl;
         private readonly string _toPath;
 
-        public CloneItemRequest(HttpCommonSettings settings, IAuth auth, string fromUrl, string toPath) 
+        public CloneItemRequest(HttpCommonSettings settings, IAuth auth, string fromUrl, string toPath)
             : base(settings, auth)
         {
             _fromUrl = fromUrl;
@@ -20,7 +20,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         {
             get
             {
-                var uri = $"{ConstSettings.CloudDomain}/api/v2/clone?conflict=rename&folder={Uri.EscapeDataString(_toPath)}&weblink={Uri.EscapeDataString(_fromUrl)}&token={Auth.AccessToken}";
+                var uri = $"{ConstSettings.CloudDomain}/api/v2/clone?conflict=rename&folder={Uri.EscapeDataString(_toPath)}&weblink={Uri.EscapeDataString(_fromUrl)}&token={_auth.AccessToken}";
                 return uri;
             }
         }

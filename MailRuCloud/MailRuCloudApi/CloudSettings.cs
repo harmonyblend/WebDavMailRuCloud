@@ -31,14 +31,16 @@ namespace YaR.Clouds
         public SharedVideoResolution DefaultSharedVideoResolution { get; set; } = SharedVideoResolution.All;
         public IWebProxy Proxy { get; set; }
         public bool UseLocks { get; set; }
-        
+
         public bool UseDeduplicate { get; set; }
 
         public DeduplicateRulesBag DeduplicateRules { get; set; }
 
         public bool DisableLinkManager { get; set; }
 
-        #region Timeouts
+        public int CloudInstanceTimeoutMinutes { get; set; }
+
+        #region Connection timeouts
 
         public int Wait100ContinueTimeoutSec { get; set; }
         public int WaitResponseTimeoutSec { get; set; }

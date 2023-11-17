@@ -8,7 +8,7 @@ namespace YaR.Clouds.Base
     {
         public SplittedFile(IList<File> files)
         {
-            _fileHeader = files.First(f => !f.ServiceInfo.SplitInfo.IsPart);
+            _fileHeader = files.FirstOrDefault(f => !f.ServiceInfo.SplitInfo.IsPart);
             Files = files;
             Parts = files
                 .Where(f => f.ServiceInfo.SplitInfo.IsPart)

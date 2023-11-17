@@ -5,7 +5,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
 {
     class ShardInfoRequest : BaseRequestJson<ShardInfoRequestResult>
     {
-        public ShardInfoRequest(HttpCommonSettings settings, IAuth auth) 
+        public ShardInfoRequest(HttpCommonSettings settings, IAuth auth)
             : base(settings, auth)
         {
         }
@@ -14,9 +14,9 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
         {
             get
             {
-                var uri = $"{ConstSettings.CloudDomain}/api/v2/dispatcher?client_id={Settings.ClientId}";
-                if (!Auth.IsAnonymous)
-                    uri += $"&access_token={Auth.AccessToken}";
+                var uri = $"{ConstSettings.CloudDomain}/api/v2/dispatcher?client_id={_settings.ClientId}";
+                if (!_auth.IsAnonymous)
+                    uri += $"&access_token={_auth.AccessToken}";
                 else
                 {
                     uri += "&email=anonym&x-email=anonym";

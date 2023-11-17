@@ -11,20 +11,20 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
 {
     class DownloadRequest
     {
-        public DownloadRequest(File file, long instart, long inend, IAuth authenticator, HttpCommonSettings settings, Cached<Dictionary<ShardType, ShardInfo>> shards)
+        public DownloadRequest(File file, long inStart, long inEnd, IAuth auth, HttpCommonSettings settings, Cached<Dictionary<ShardType, ShardInfo>> shards)
         {
-            Request = CreateRequest(authenticator, settings.Proxy, file, instart, inend, settings.UserAgent, shards);
+            Request = CreateRequest(auth, settings.Proxy, file, inStart, inEnd, settings.UserAgent, shards);
         }
 
         public HttpWebRequest Request { get; }
 
-        private static HttpWebRequest CreateRequest(IAuth authenticator, IWebProxy proxy, File file, long instart, long inend,  string userAgent, Cached<Dictionary<ShardType, ShardInfo>> shards)
+        private static HttpWebRequest CreateRequest(IAuth auth, IWebProxy proxy, File file, long instart, long inend,  string userAgent, Cached<Dictionary<ShardType, ShardInfo>> shards)
         {
             bool isLinked = !file.PublicLinks.IsEmpty;
 
             string downloadkey = isLinked
-                ? authenticator.DownloadToken
-                : authenticator.AccessToken;
+                ? auth.DownloadToken
+                : auth.AccessToken;
 
             var shard = isLinked
                 ? shards.Value[ShardType.WeblinkGet]
@@ -41,7 +41,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
             request.Headers.Add("Accept-Ranges", "bytes");
             request.AddRange(instart, inend);
             request.Proxy = proxy;
-            request.CookieContainer = authenticator.Cookies;
+            request.CookieContainer = auth.Cookies;
             request.Method = "GET";
             request.ContentType = MediaTypeNames.Application.Octet;
             request.Accept = "*/*";

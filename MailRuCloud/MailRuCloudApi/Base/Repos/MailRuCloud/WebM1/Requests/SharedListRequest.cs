@@ -15,7 +15,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
         {
             get
             {
-                var uri = $"/api/m1/folder/shared/links?access_token={Auth.AccessToken}";
+                var uri = $"/api/m1/folder/shared/links?access_token={_auth.AccessToken}";
                 return uri;
             }
         }

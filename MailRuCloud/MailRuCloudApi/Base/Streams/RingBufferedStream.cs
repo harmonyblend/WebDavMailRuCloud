@@ -72,7 +72,7 @@ namespace YaR.Clouds.Base.Streams
         /// <inheritdoc/>
         public override void Flush()
         {
-            if (_disposed) 
+            if (_disposed)
                 return;
 
             _flushed.Set();
@@ -464,10 +464,7 @@ namespace YaR.Clouds.Base.Streams
                 GetWaitTask().Wait(cancellationToken);
                 canceled = false;
             }
-            catch (Exception ex)
-                when (ex is OperationCanceledException
-                    || (ex is AggregateException
-                        && ex.InnerOf<OperationCanceledException>() != null))
+            catch (Exception ex) when (ex.Contains<OperationCanceledException>())
             {
                 canceled = true;
             }
@@ -584,10 +581,7 @@ namespace YaR.Clouds.Base.Streams
                 ret = GetWaitTask().Wait(millisecondsTimeout, cancellationToken);
                 canceled = false;
             }
-            catch (Exception ex)
-                when (ex is OperationCanceledException
-                    || (ex is AggregateException
-                        && ex.InnerOf<OperationCanceledException>() != null))
+            catch (Exception ex) when (ex.Contains<OperationCanceledException>())
             {
                 canceled = true;
             }

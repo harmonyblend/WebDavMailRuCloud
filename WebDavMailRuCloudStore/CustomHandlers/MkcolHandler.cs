@@ -54,7 +54,7 @@ namespace YaR.Clouds.WebDavStore.CustomHandlers
 
             // Obtain the parent entry
             var collection = await store.GetCollectionAsync(splitUri.Parent, httpContext).ConfigureAwait(false);
-            if (collection is not { IsValid: true }) 
+            if (collection is not { IsValid: true })
             {
                 // Source not found
                 response.SetStatus(DavStatusCode.Conflict);
