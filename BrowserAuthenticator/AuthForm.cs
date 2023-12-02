@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -142,7 +141,7 @@ public partial class AuthForm : Form
         await _webView2.EnsureCoreWebView2Async(env);
         WebViewPanel.Controls.Add(_webView2);
         _webView2.Dock = DockStyle.Fill;
-        _webView2.CoreWebView2.FrameNavigationCompleted += WebView_NavigationCompleted;
+        _webView2.CoreWebView2.NavigationCompleted += WebView_NavigationCompleted;
 
 
         ShowWindowDelay.Enabled = true;
@@ -248,10 +247,10 @@ public partial class AuthForm : Form
 
         if (e.IsSuccess &&
             _webView2 is not null &&
-            (url.StartsWith("https://disk.yandex.ru/client/disk") || url.StartsWith("https://cloud.mail.ru/home")))
+            (url.StartsWith("https://disk.yandex.ru/client/") || url.StartsWith("https://cloud.mail.ru/home")))
         {
             var htmlEncoded = await _webView2!.CoreWebView2.ExecuteScriptAsync("document.body.outerHTML");
-            _html = JsonDocument.Parse(htmlEncoded).RootElement.ToString();
+            _html = Regex.Unescape(htmlEncoded)?.Trim('"');
 
             _cookieList = await _webView2.CoreWebView2.CookieManager.GetCookiesAsync(url);
 
