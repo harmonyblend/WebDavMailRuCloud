@@ -11,20 +11,20 @@ namespace YaR.Clouds.Base.Repos.YandexDisk
             HashMd5 = new Hash(FileHashType.YadMd5, hashMd5.ToHexString());
         }
 
-        public Hash Get(FileHashType htype)
+        public readonly Hash Get(FileHashType htype)
         {
             if (htype != FileHashType.YadSha256 && htype != FileHashType.YadMd5 )
-                throw new ArgumentException($"Mail.ru Cloud supportd only {FileHashType.YadSha256} and {FileHashType.YadMd5} hash type");
+                throw new ArgumentException($"Mail.ru Cloud supported only {FileHashType.YadSha256} and {FileHashType.YadMd5} hash type");
 
             return Hash;
         }
 
-        public Hash Hash => HashSha256;
+        public readonly Hash Hash => HashSha256;
 
         public Hash HashSha256 { get; private set; }
         public Hash HashMd5 { get; private set; }
 
-        public override string ToString()
+        public override readonly string ToString()
         {
             return $"{FileHashType.YadSha256}={HashSha256.Value}, {FileHashType.YadMd5}={HashMd5.Value}";
         }

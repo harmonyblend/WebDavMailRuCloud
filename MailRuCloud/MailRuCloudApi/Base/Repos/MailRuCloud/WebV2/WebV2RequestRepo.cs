@@ -22,7 +22,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2
 
         public sealed override HttpCommonSettings HttpSettings { get; } = new()
         {
-            ClientId = string.Empty
+            ClientId = string.Empty,
+            BaseDomain = "https://cloud.mail.ru"
         };
 
         public WebV2RequestRepo(CloudSettings settings, IBasicCredentials credentials, AuthCodeRequiredDelegate onAuthCodeRequired)

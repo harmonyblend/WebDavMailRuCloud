@@ -19,13 +19,6 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
         {
         }
 
-        protected override string RelationalUri
-        {
-            get
-            {
-                const string uri = $"{ConstSettings.CloudDomain}/api/v2/dispatcher?api=2&email=anonym&x-email=anonym";
-                return uri;
-            }
-        }
+        protected override string RelationalUri => $"{_settings.BaseDomain}/api/v2/dispatcher?api=2&email=anonym&x-email=anonym";
     }
 }

@@ -17,13 +17,6 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
             return request;
         }
 
-        protected override string RelationalUri
-        {
-            get
-            {
-                const string uri = $"/sdc?from={ConstSettings.CloudDomain}/home";
-                return uri;
-            }
-        }
+        protected override string RelationalUri => $"/sdc?from={_settings.BaseDomain}/home";
     }
 }

@@ -26,9 +26,9 @@ namespace YaR.Clouds.Base.Requests
 
         protected abstract string RelationalUri { get; }
 
-        protected virtual HttpWebRequest CreateRequest(string baseDomain = null)
+        protected virtual HttpWebRequest CreateRequest(string baseDomain)
         {
-            string domain = string.IsNullOrEmpty(baseDomain) ? ConstSettings.CloudDomain : baseDomain;
+            string domain = baseDomain;
             var uriz = new Uri(new Uri(domain), RelationalUri);
 
             // suppressing escaping is obsolete and breaks, for example, Chinese names
@@ -40,10 +40,13 @@ namespace YaR.Clouds.Base.Requests
             var request = WebRequest.CreateHttp(uriz);
 #pragma warning restore SYSLIB0014 // Type or member is obsolete
             request.Host = uriz.Host;
+            request.Headers.Add("Origin", $"{uriz.Scheme}://{uriz.Host}");
+            request.Referer = $"{uriz.Scheme}://{uriz.Host}";
+            request.Headers.Add("sec-ch-ua", _settings.CloudSettings.SecChUa);
             request.Proxy = _settings.Proxy;
             request.CookieContainer = _auth?.Cookies;
             request.Method = "GET";
-            request.ContentType = ConstSettings.DefaultRequestType;
+            request.ContentType = "application/x-www-form-urlencoded; charset=UTF-8";
             request.Accept = "application/json";
             request.UserAgent = _settings.UserAgent;
             request.ContinueTimeout = _settings.CloudSettings.Wait100ContinueTimeoutSec * 1000;
@@ -118,7 +121,7 @@ namespace YaR.Clouds.Base.Requests
 
                     try
                     {
-                        httpRequest = CreateRequest();
+                        httpRequest = CreateRequest(_settings.BaseDomain);
 
                         var requestContent = CreateHttpContent();
                         if (requestContent != null)

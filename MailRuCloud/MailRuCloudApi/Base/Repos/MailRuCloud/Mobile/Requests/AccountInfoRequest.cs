@@ -9,6 +9,6 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
         {
         }
 
-        protected override string RelationalUri => $"{ConstSettings.CloudDomain}/api/m1/user?access_token={_auth.AccessToken}";
+        protected override string RelationalUri => $"{_settings.BaseDomain}/api/m1/user?access_token={_auth.AccessToken}";
     }
 }

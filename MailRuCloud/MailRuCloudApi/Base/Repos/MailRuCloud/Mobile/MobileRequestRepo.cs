@@ -25,7 +25,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile
         public override HttpCommonSettings HttpSettings { get; } = new()
         {
             ClientId = "cloud-win",
-            UserAgent = "CloudDiskOWindows 17.12.0009 beta WzBbt1Ygbm"
+            UserAgent = "CloudDiskOWindows 17.12.0009 beta WzBbt1Ygbm",
+            BaseDomain = "https://cloud.mail.ru"
         };
 
         public MobileRequestRepo(CloudSettings settings, IWebProxy proxy, IAuth auth, int listDepth)

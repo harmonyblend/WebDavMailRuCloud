@@ -12,7 +12,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
         {
         }
 
-        protected override HttpWebRequest CreateRequest(string baseDomain = null)
+        protected override HttpWebRequest CreateRequest(string baseDomain)
         {
             var request = base.CreateRequest("https://passport.yandex.ru");
             return request;

@@ -57,6 +57,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 UserAgent = settings.UserAgent,
                 CloudSettings = settings,
                 Proxy = proxy,
+                BaseDomain = "https://disk.yandex.ru"
             };
 
             _credentials = credentials;

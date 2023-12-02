@@ -36,7 +36,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
         public sealed override HttpCommonSettings HttpSettings { get; } = new()
         {
             ClientId = "cloud-win",
-            UserAgent = "CloudDiskOWindows 17.12.0009 beta WzBbt1Ygbm"
+            UserAgent = "CloudDiskOWindows 17.12.0009 beta WzBbt1Ygbm",
+            BaseDomain = "https://cloud.mail.ru"
         };
 
         protected WebM1RequestRepo(CloudSettings settings, IWebProxy proxy,
@@ -118,8 +119,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1
                     {
                         request.Headers.Add("Accept-Ranges", "bytes");
                         request.ContentType = MediaTypeNames.Application.Octet;
-                        request.Referer = $"{ConstSettings.CloudDomain}/home/{Uri.EscapeDataString(file.Path)}";
-                        request.Headers.Add("Origin", ConstSettings.CloudDomain);
+                        request.Referer = $"{HttpSettings.BaseDomain}/home/{Uri.EscapeDataString(file.Path)}";
+                        request.Headers.Add("Origin", HttpSettings.BaseDomain);
                     }
 
                     request.Timeout = 15 * 1000;

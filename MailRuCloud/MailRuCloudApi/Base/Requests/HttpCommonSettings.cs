@@ -8,5 +8,6 @@ namespace YaR.Clouds.Base.Requests
         public string ClientId { get; set; }
         public string UserAgent { get; set; }
         public CloudSettings CloudSettings { get; set; }
+        public string BaseDomain { get; set; }
     }
 }

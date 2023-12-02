@@ -21,6 +21,8 @@ using AccountInfoRequest = YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests.Acco
 using CreateFolderRequest = YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.CreateFolderRequest;
 using MoveRequest = YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests.MoveRequest;
 using static YaR.Clouds.Cloud;
+using System.Timers;
+using System.Xml.Linq;
 
 namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 {
@@ -44,7 +46,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
         public sealed override HttpCommonSettings HttpSettings { get; } = new()
         {
             //ClientId = "cloud-android"
-            ClientId = "cloud-win"
+            ClientId = "cloud-win",
+            BaseDomain = "https://cloud.mail.ru"
         };
 
         public WebBinRequestRepo(CloudSettings settings, IBasicCredentials credentials, AuthCodeRequiredDelegate onAuthCodeRequired)
@@ -65,9 +68,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
             // required for Windows 7 breaking connection
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
-
         }
-
 
 
         public Stream GetDownloadStream(File file, long? start = null, long? end = null)
@@ -173,7 +174,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
         public async Task<CopyResult> Move(string sourceFullPath, string destinationPath, ConflictResolver? conflictResolver = null)
         {
-            //var req = await new MoveRequest(HttpSettings, Authent, sourceFullPath, destinationPath).MakeRequestAsync(_connectionLimiter);
+            //var req = await new MoveRequest(HttpSettings, Auth, sourceFullPath, destinationPath).MakeRequestAsync(_connectionLimiter);
             //var res = req.ToCopyResult();
             //return res;
 
@@ -230,11 +231,11 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
             if (!path.IsLink && depth > 1)
                 return await FolderInfo(path.Path, depth);
 
-            FolderInfoResult datares;
+            FolderInfoResult dataRes;
             try
             {
-                datares = await new FolderInfoRequest(HttpSettings, Auth, path, offset, limit)
-                    .MakeRequestAsync(_connectionLimiter);
+                dataRes = await new FolderInfoRequest(HttpSettings, Auth, path, offset, limit)
+                        .MakeRequestAsync(_connectionLimiter);
             }
             catch (WebException e) when (e.Response is HttpWebResponse { StatusCode: HttpStatusCode.NotFound })
             {
@@ -245,8 +246,8 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
             //TODO: subject to refact, bad-bad-bad
             if (!path.IsLink || path.Link.ItemType == Cloud.ItemType.Unknown)
-                itemType = datares.Body.Home == path.Path ||
-                           WebDavPath.PathEquals("/" + datares.Body.Weblink, path.Path)
+                itemType = dataRes.Body.Home == path.Path ||
+                           WebDavPath.PathEquals("/" + dataRes.Body.Weblink, path.Path)
                     ? Cloud.ItemType.Folder
                     : Cloud.ItemType.File;
             else
@@ -254,13 +255,13 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebBin
 
 
             var entry = itemType == Cloud.ItemType.File
-                ? (IEntry)datares.ToFile(
+                ? (IEntry)dataRes.ToFile(
                     PublicBaseUrlDefault,
                     home: WebDavPath.Parent(path.Path ?? string.Empty),
                     ulink: path.Link,
                     fileName: path.Link == null ? WebDavPath.Name(path.Path) : path.Link.OriginalName,
                     nameReplacement: path.Link?.IsLinkedToFileSystem ?? true ? WebDavPath.Name(path.Path) : path.Link.Name)
-                : (IEntry)datares.ToFolder(PublicBaseUrlDefault, path.Path, path.Link);
+                : (IEntry)dataRes.ToFolder(PublicBaseUrlDefault, path.Path, path.Link);
 
             if (limit == int.MaxValue && entry is Folder fld)
                 fld.IsChildrenLoaded = limit == int.MaxValue;

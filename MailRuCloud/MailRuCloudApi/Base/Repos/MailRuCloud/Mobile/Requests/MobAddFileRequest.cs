@@ -59,7 +59,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.Mobile.Requests
             return body;
         }
 
-        private static readonly OpResult[] SuccessCodes = { OpResult.Ok, OpResult.NotModified, OpResult.Dunno04, OpResult.Dunno09};
+        private static readonly OpResult[] SuccessCodes = { OpResult.Ok, OpResult.NotModified, OpResult.Dunno04, OpResult.Dunno09 };
 
         protected override RequestResponse<Result> DeserializeMessage(NameValueCollection responseHeaders, ResponseBodyStream data)
         {

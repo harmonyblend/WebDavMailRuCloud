@@ -78,14 +78,12 @@ namespace NWebDav.Server
                 throw new ArgumentNullException(nameof(httpContext));
 
             // Make sure the HTTP context has a request
-            var request = httpContext.Request;
-            if (request == null)
-                throw new ArgumentException("The HTTP context doesn't have a request.", nameof(httpContext));
+            var request = httpContext.Request
+                ?? throw new ArgumentException("The HTTP context doesn't have a request.", nameof(httpContext));
 
             // Make sure the HTTP context has a response
-            var response = httpContext.Response;
-            if (response == null)
-                throw new ArgumentException("The HTTP context doesn't have a response.", nameof(httpContext));
+            var response = httpContext.Response
+                ?? throw new ArgumentException("The HTTP context doesn't have a response.", nameof(httpContext));
 
             // Determine the request log-string
             var logRequest = $"{request.HttpMethod}:{Uri.UnescapeDataString(request.Url.AbsoluteUri)}:{request.RemoteEndPoint}";

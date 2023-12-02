@@ -16,13 +16,6 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebV2.Requests
             _toPath = toPath;
         }
 
-        protected override string RelationalUri
-        {
-            get
-            {
-                var uri = $"{ConstSettings.CloudDomain}/api/v2/clone?conflict=rename&folder={Uri.EscapeDataString(_toPath)}&weblink={Uri.EscapeDataString(_fromUrl)}&token={_auth.AccessToken}";
-                return uri;
-            }
-        }
+        protected override string RelationalUri => $"{_settings.BaseDomain}/api/v2/clone?conflict=rename&folder={Uri.EscapeDataString(_toPath)}&weblink={Uri.EscapeDataString(_fromUrl)}&token={_auth.AccessToken}";
     }
 }

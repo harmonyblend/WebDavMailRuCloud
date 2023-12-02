@@ -13,7 +13,7 @@ namespace YaR.Clouds.Base.Repos.MailRuCloud.WebM1.Requests
         {
             get
             {
-                var uri = $"{ConstSettings.CloudDomain}/api/m1/dispatcher?client_id={_settings.ClientId}";
+                var uri = $"{_settings.BaseDomain}/api/m1/dispatcher?client_id={_settings.ClientId}";
                 if (!string.IsNullOrEmpty(_auth.AccessToken))
                     uri += $"&access_token={_auth.AccessToken}";
                 return uri;
