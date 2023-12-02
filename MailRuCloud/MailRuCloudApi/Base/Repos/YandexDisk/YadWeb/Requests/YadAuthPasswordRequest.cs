@@ -32,13 +32,13 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
             request.Accept = "application/json, text/javascript, */*; q=0.01";
             request.Referer = "https://passport.yandex.ru/";
-            request.ContentType = "application/x-www-form-urlencoded; charset=UTF-8";
+            //request.ContentType = "application/x-www-form-urlencoded; charset=UTF-8";
 
-            request.Headers.Add("sec-ch-ua", "\" Not A; Brand\";v=\"99\", \"Chromium\";v=\"99\", \"Google Chrome\";v=\"99\"");
+            //request.Headers.Add("sec-ch-ua", "\" Not A; Brand\";v=\"99\", \"Chromium\";v=\"99\", \"Google Chrome\";v=\"99\"");
             request.Headers.Add("X-Requested-With", "XMLHttpRequest");
             request.Headers.Add("sec-ch-ua-mobile", "?0");
             request.Headers.Add("sec-ch-ua-platform", "\"Windows\"");
-            request.Headers.Add("Origin", "https://passport.yandex.ru");
+            //request.Headers.Add("Origin", "https://passport.yandex.ru");
             request.Headers.Add("Sec-Fetch-Site", "same-origin");
             request.Headers.Add("Sec-Fetch-Mode", "cors");
             request.Headers.Add("Sec-Fetch-Dest", "empty");
@@ -51,12 +51,29 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
         protected override byte[] CreateHttpContent()
         {
 #pragma warning disable SYSLIB0013 // Type or member is obsolete
+            /*
+             * 29.11.2023 Поскольку ниже стоит FormUrlEncodedContent(keyValues),
+             * который сам делает кодирование, указание параметров здесь
+             * должно быть без Uri.EscapeUriString.
+             * При Uri.EscapeUriString(_auth.Password)) сервер возвращал
+             * ошибку password.not_matched даже после смены пароля с последующим
+             * множественным входом с вводом капчи, а затем уже без капчи.
+             * И все это до тех пор, пока пароль не был задан здесь
+             * просто в виде _auth.Password, без Uri.EscapeUriString.
+             */
+            //var keyValues = new List<KeyValuePair<string, string>>
+            //{
+            //    new("csrf_token", Uri.EscapeUriString(_csrf)),
+            //    new("track_id", _trackId),
+            //    new("password", Uri.EscapeUriString(_auth.Password)),
+            //    new("retpath", Uri.EscapeUriString("https://disk.yandex.ru/client/disk"))
+            //};
             var keyValues = new List<KeyValuePair<string, string>>
             {
-                new("csrf_token", Uri.EscapeUriString(_csrf)),
+                new("csrf_token", _csrf),
                 new("track_id", _trackId),
-                new("password", Uri.EscapeUriString(_auth.Password)),
-                new("retpath", Uri.EscapeUriString("https://disk.yandex.ru/client/disk"))
+                new("password", _auth.Password),
+                new("retpath", "https://disk.yandex.ru/client/disk")
             };
 #pragma warning restore SYSLIB0013 // Type or member is obsolete
             var content = new FormUrlEncodedContent(keyValues);
@@ -69,7 +86,31 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
             var res = base.DeserializeMessage(responseHeaders, stream);
 
             if (res.Result.State == "auth_challenge")
-                throw new AuthenticationException("Browser login required to accept additional confirmations");
+                throw new AuthenticationException(
+                    "The account requires browser login with additional confirmation by SMS or QR code. " +
+                    "Please use BrowserAuthenticator application for this account.");
+
+            if (res.Result.Status == "error" &&
+                res.Result.Errors.Count > 0)
+            {
+                if (res.Result.Errors[0] == "captcha.required")
+                {
+                    throw new AuthenticationException(
+                        "Authentication failed: captcha.required. " +
+                        "Use your browser application for several login and logout operations " +
+                        "until site stop asking for captcha during login.");
+                }
+                if (res.Result.Errors[0] == "password.not_matched")
+                {
+                    throw new AuthenticationException(
+                        "Authentication failed: password.not_matched. " +
+                        "The password you used to log in does not match with the main password of the account. " +
+                        "Do not use 'Application Passwords' here, use the main account password only! " +
+                        "In case you a sure you have used the main password, try to renew the main password.");
+                }
+
+                throw new AuthenticationException("Authentication failed: " + string.Join(", ", res.Result.Errors));
+            }
 
             var uid = responseHeaders["X-Default-UID"];
             if (string.IsNullOrWhiteSpace(uid))
