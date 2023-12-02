@@ -41,7 +41,7 @@ public class EntryCache : IDisposable
     //private static readonly TimeSpan _maxCleanUpInterval = new TimeSpan(0, 10 /* минуты */, 0);
 
     // По умолчанию очистка кеша от устаревших записей производится каждые 30 секунд
-    private TimeSpan _cleanUpPeriod = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _cleanUpPeriod = TimeSpan.FromSeconds(30);
 
     private readonly TimeSpan _expirePeriod;
 
@@ -141,14 +141,22 @@ public class EntryCache : IDisposable
         if (_disposedValue) return;
         if (disposing)
         {
-            _checkActiveOperationsTimer?.Stop();
-            _checkActiveOperationsTimer?.Dispose();
-            _cleanTimer?.Stop();
-            _cleanTimer?.Dispose();
+            if (_checkActiveOperationsTimer is not null)
+            {
+                _checkActiveOperationsTimer.Stop();
+                _checkActiveOperationsTimer.Enabled = false;
+                _checkActiveOperationsTimer.Dispose();
+            }
+            if (_cleanTimer is not null)
+            {
+                _cleanTimer.Enabled = false;
+                _cleanTimer?.Stop();
+                _cleanTimer?.Dispose();
+            }
             Clear();
             _locker?.Dispose();
 
-            Logger.Debug("EntryCache disposed");
+            Logger.Debug("EntryCache is disposed");
         }
         _disposedValue = true;
     }
@@ -250,7 +258,7 @@ public class EntryCache : IDisposable
     private async void CheckActiveOps(object sender, System.Timers.ElapsedEventArgs e)
     {
         CheckUpInfo info = await _activeOperationsAsync();
-        if (info is null)
+        if (info is null || _disposedValue)
             return;
 
         CheckUpInfo.CheckInfo? currentValue;
@@ -278,7 +286,7 @@ public class EntryCache : IDisposable
             }
         }
 
-        List<string> paths = new List<string>();
+        List<string> paths = [];
         foreach (var op in info.ActiveOperations)
         {
             if (!string.IsNullOrEmpty(op.SourcePath))
@@ -339,6 +347,7 @@ public class EntryCache : IDisposable
                     // то можно точно сказать, что такого элемента нет
                     // не только в кеше, но и на сервере.
                     Logger.Debug($"Cache says: {fullPath} doesn't exist");
+                    //System.Diagnostics.Debug.WriteLine($"Cache says: {fullPath} doesn't exist");
                     return (default, GetState.NotExists);
                 }
 
@@ -349,6 +358,7 @@ public class EntryCache : IDisposable
             if (cachedEntry.Entry is null)
             {
                 Logger.Debug($"Cache says: {fullPath} doesn't exist");
+                //System.Diagnostics.Debug.WriteLine($"Cache says: {fullPath} doesn't exist");
                 return (default, GetState.NotExists);
             }
 
@@ -369,6 +379,7 @@ public class EntryCache : IDisposable
                 if (!cachedEntry.AllDescendantsInCache)
                 {
                     Logger.Debug($"Cache says: {fullPath} folder's content isn't cached");
+                    //System.Diagnostics.Debug.WriteLine($"Cache says: {fullPath} folder's content isn't cached");
                     return (default, GetState.EntryWithUnknownContent);
                 }
 
