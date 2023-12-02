@@ -252,7 +252,7 @@ public partial class Credentials : IBasicCredentials
             try
             {
                 string fileName = string.IsNullOrWhiteSpace(Login) ? "anonymous" : Login;
-                path = Path.Combine(_settings.BrowserAuthenticatorCacheDir, fileName);
+                path = GetPath(_settings.BrowserAuthenticatorCacheDir, fileName);
 
                 if (System.IO.File.Exists(path))
                 {
@@ -323,7 +323,7 @@ public partial class Credentials : IBasicCredentials
             if (!string.IsNullOrEmpty(_settings.BrowserAuthenticatorCacheDir))
             {
                 string fileName = string.IsNullOrWhiteSpace(Login) ? "anonymous" : Login;
-                string path = Path.Combine(_settings.BrowserAuthenticatorCacheDir, fileName);
+                string path = GetPath(_settings.BrowserAuthenticatorCacheDir, fileName);
                 try
                 {
                     string content = JsonConvert.SerializeObject(response);
@@ -389,6 +389,16 @@ public partial class Credentials : IBasicCredentials
         }
     }
 
+    private static string GetPath(string folder, string fileName)
+    {
+        if (string.IsNullOrEmpty(fileName))
+            fileName = "anonymous";
+        string[] parts = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);
+        fileName = string.Join("_", parts);
+        string path = Path.Combine(folder, fileName);
+        return path;
+    }
+
     /// <summary>
     /// <para>Если аутентификация была через браузер,
     /// стирает файл с кешем куки и запрашивает повторную аутентификацию через браузер.</para>
@@ -401,7 +411,7 @@ public partial class Credentials : IBasicCredentials
         if (!string.IsNullOrEmpty(_settings.BrowserAuthenticatorCacheDir))
         {
             string fileName = string.IsNullOrWhiteSpace(Login) ? "anonymous" : Login;
-            string path = Path.Combine(_settings.BrowserAuthenticatorCacheDir, fileName);
+            string path = GetPath(_settings.BrowserAuthenticatorCacheDir, fileName);
 
             try
             {
@@ -505,7 +515,7 @@ public partial class Credentials : IBasicCredentials
             // Если аутентификация прошла успешно, сохраняем результат в кеш в файл
             if (!string.IsNullOrEmpty(_settings.BrowserAuthenticatorCacheDir))
             {
-                string path = Path.Combine(_settings.BrowserAuthenticatorCacheDir, Login);
+                string path = GetPath(_settings.BrowserAuthenticatorCacheDir, Login);
 
                 try
                 {
