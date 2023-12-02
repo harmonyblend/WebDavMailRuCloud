@@ -16,16 +16,6 @@ namespace YaR.Clouds.Console
         [Option('h', "host", Required = false, Default = "http://127.0.0.1", HelpText = "WebDAV server host, including protocol")]
         public string Host { get; set; }
 
-        [Obsolete]
-        [Option('l', "login", Required = false, HelpText = "Login to Mail.ru Cloud", Hidden = true)]
-        // ReSharper disable once UnusedMember.Global
-        public string Login { get; set; }
-
-        [Obsolete]
-        [Option('s', "password", Required = false, HelpText = "Password to Mail.ru Cloud", Hidden = true)]
-        // ReSharper disable once UnusedMember.Global
-        public string Password { get; set; }
-
         [Option("maxthreads", Default = 5, HelpText = "Maximum concurrent listening connections to the service")]
         public int MaxThreadCount { get; set; }
 
