@@ -18,6 +18,20 @@ namespace YaR.Clouds.Base.Requests
 
         protected override RequestResponse<T> DeserializeMessage(NameValueCollection responseHeaders, Stream stream)
         {
+#if DEBUG
+            using (var sr = new StreamReader(stream))
+            {
+                string text = sr.ReadToEnd();
+
+                var msg = new RequestResponse<T>
+                {
+                    Ok = true,
+                    Result = JsonConvert.DeserializeObject<T>(text)
+                };
+                return msg;
+
+            }
+#else
             var serializer = new JsonSerializer();
             using var sr = new StreamReader(stream);
             using var jsonTextReader = new JsonTextReader(sr);
@@ -28,20 +42,7 @@ namespace YaR.Clouds.Base.Requests
                 Result = serializer.Deserialize<T>(jsonTextReader)
             };
             return msg;
-
-            //using (var sr = new StreamReader(stream))
-            //{
-            //    string text = sr.ReadToEnd();
-
-            //    var msg = new RequestResponse<T>
-            //    {
-            //        Ok = true,
-            //        Result = JsonConvert.DeserializeObject<T>(text)
-            //    };
-            //    return msg;
-
-            //}
-
+#endif
         }
     }
 }
