@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -71,13 +72,18 @@ namespace YaR.Clouds
                     AccountInfo = RequestRepo.AccountInfo().Result
                         ?? throw new AuthenticationException("The cloud server rejected the credentials provided");
                 }
-                catch (Exception e) when (e.OfType<AuthenticationException>().Any())
+                catch (Exception e) when (Credentials.AuthenticationUsingBrowser &&
+                                          e.OfType<AuthenticationException>().Any())
                 {
-                    Logger.Warn("Refresh credentials");
+                    Logger.Warn("Refreshing credentials...");
 
                     try
                     {
-                        Credentials.Refresh();
+                        if (!Credentials.Refresh())
+                        {
+                            Logger.Warn("Credentials refreshing is failed");
+                            throw;
+                        }
                     }
                     catch (Exception e2) when (e2.OfType<AuthenticationException>().Any())
                     {
@@ -446,7 +452,7 @@ namespace YaR.Clouds
             if (folderPaths is null || folderPaths.Length == 0 || string.IsNullOrEmpty(nameWithoutPathToFind))
                 return null;
 
-            List<string> paths = new List<string>();
+            List<string> paths = [];
             // Сначала смотрим в кеше, без обращений к серверу
             foreach (var folderPath in folderPaths)
             {
@@ -1211,8 +1217,7 @@ namespace YaR.Clouds
                 ServerFileProcessed = serverFileProcessed
             };
 
-            var task = await Task.FromResult(f.Create(file, OnFileUploaded, discardEncryption))
-                .ConfigureAwait(false);
+            var task = await Task.FromResult(f.Create(file, OnFileUploaded, discardEncryption)).ConfigureAwait(false);
             var stream = await task;
 
             return stream;
@@ -1317,10 +1322,8 @@ namespace YaR.Clouds
             _disposedValue = true;
         }
 
-        public void Dispose()
-        {
-            Dispose(true);
-        }
+        public void Dispose() => Dispose(true);
+
         #endregion
 
         public async Task<bool> LinkItem(Uri url, string path, string name, bool isFile, long size, DateTime? creationDate)
