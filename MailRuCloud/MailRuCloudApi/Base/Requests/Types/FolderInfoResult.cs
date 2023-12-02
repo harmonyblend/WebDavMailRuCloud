@@ -43,6 +43,16 @@ namespace YaR.Clouds.Base.Requests.Types
             [JsonProperty("weblink")]
             public string Weblink { get; set; }
 
+            #region Преимущественно для выборки отдельного файла или папки вместо списка
+
+            [JsonProperty("mtime")]
+            public ulong Mtime;
+
+            [JsonProperty("hash")]
+            public string Hash { get; set; }
+
+            #endregion
+
             public class FolderInfoProps
             {
                 [JsonProperty("mtime")]
