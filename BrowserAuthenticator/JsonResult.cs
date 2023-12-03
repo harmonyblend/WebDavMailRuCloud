@@ -2,6 +2,7 @@
 
 namespace BrowserAuthenticator;
 
+#pragma warning disable CA1507 // Use nameof to express symbol names
 public class BrowserAppResult
 {
     [JsonProperty("ErrorMessage")]
@@ -27,6 +28,7 @@ public class BrowserAppResult
         return JsonConvert.SerializeObject(this);
     }
 }
+
 public class BrowserAppCookieResponse
 {
     [JsonProperty("name")]

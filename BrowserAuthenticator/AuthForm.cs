@@ -23,15 +23,12 @@ public partial class AuthForm : Form
     private string? _desiredLogin = null;
     private readonly BrowserAppResult _response;
     private bool _exitting;
-    //private CoreWebView2ControllerOptions? _options = null;
-    //private CoreWebView2Controller? _controller = null;
     private string _profile;
     private bool _isYandexCloud;
     private bool _isMailCloud;
     private bool _manualCommit;
     private string? _html;
     private List<CoreWebView2Cookie>? _cookieList;
-    //private Form? _form;
     private WebView2? _webView2;
 
     public AuthForm(string desiredLogin, string profile, bool manualCommit,
@@ -39,7 +36,6 @@ public partial class AuthForm : Form
     {
         InitializeComponent();
 
-        //_form = null;
         _webView2 = null;
         _html = null;
         _cookieList = null;

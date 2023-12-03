@@ -11,11 +11,23 @@
     <AssemblyVersion>$(ReleaseVersion)</AssemblyVersion>
     <FileVersion>$(ReleaseVersion)</FileVersion>
     <Version>$(ReleaseVersion)</Version>
-    <Company>ZZZConsulting</Company>
     <PackageProjectUrl>https://github.com/ZZZConsulting/WebDavMailRuCloud</PackageProjectUrl>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
     <RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
+    <Authors>YaR229 and Contributors</Authors>
+    <Product>BrowserAuthenticator for WebDAV emulator</Product>
+    <Copyright>MIT License, Copyright (c) 2023 YaR229 and Contributors</Copyright>
+    <PackageIcon>cloud.ico</PackageIcon>
+    <RepositoryUrl>https://github.com/ZZZConsulting/WebDavMailRuCloud</RepositoryUrl>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE.txt">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2151.40" />
@@ -35,6 +47,13 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="files\cloud.ico">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -24,7 +24,7 @@ namespace YaR.Clouds.Console
                             DisplayName = string.IsNullOrEmpty(options.ServiceInstallDisplayName)
                                 ? $"WebDavCloud [port {string.Join(", port ", options.Port)}]"
                                 : options.ServiceInstallDisplayName,
-                            Description = "WebDAV emulator for cloud.Mail.ru / disk.Yandex.ru",
+                            Description = "WebDAV emulator for cloud.Mail.ru & disk.Yandex.ru",
 
                             FireStart = () => Payload.Run(options),
                             FireStop = Payload.Stop
