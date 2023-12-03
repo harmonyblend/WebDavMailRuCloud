@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Reflection;
 
-#if NET7_0_WINDOWS
+#if NET7_0_WINDOWS || NET8_0_WINDOWS
 using System.Text;
 using System.Diagnostics;
 using System.Security;
 #endif
-#if NET48 || NET7_0_WINDOWS
+#if NET48 || NET7_0_WINDOWS || NET8_0_WINDOWS
 using System.Configuration.Install;
 using System.ServiceProcess;
 using Microsoft.Win32;
@@ -65,7 +65,7 @@ namespace WinServiceInstaller
                 cmd = string.Concat(cmd, " ", CommandLine);
             SetCommandLine(cmd);
 #endif
-#if NET7_0_WINDOWS
+#if NET7_0_WINDOWS || NET8_0_WINDOWS
             string exePath = GetExePath();
             var serviceKey = GetRegistryKey();
 
@@ -160,7 +160,7 @@ namespace WinServiceInstaller
             SetCommandLine(cmd);
             ManagedInstallerClass.InstallHelper(new[] { "/u", cmd });
 #endif
-#if NET7_0_WINDOWS
+#if NET7_0_WINDOWS || NET8_0_WINDOWS
             string exePath = GetExePath();
             var serviceKey = GetRegistryKey();
 
@@ -205,7 +205,7 @@ namespace WinServiceInstaller
             serviceKey.SetValue("ImagePath", cmd, Microsoft.Win32.RegistryValueKind.String);
         }
 
-#if NET7_0_WINDOWS
+#if NET7_0_WINDOWS || NET8_0_WINDOWS
 
         private static bool NeedWaitSc(string serviceName)
         {

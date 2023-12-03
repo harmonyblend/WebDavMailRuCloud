@@ -1,4 +1,4 @@
-﻿#if NET48 || NET7_0_WINDOWS
+﻿#if NET48 || NET7_0_WINDOWS || NET8_0_WINDOWS
 using System.ComponentModel;
 using System.Configuration.Install;
 using System.ServiceProcess;

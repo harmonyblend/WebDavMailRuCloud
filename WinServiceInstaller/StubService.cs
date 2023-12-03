@@ -1,4 +1,4 @@
-﻿#if NET48 || NET7_0_WINDOWS
+﻿#if NET48 || NET7_0_WINDOWS || NET8_0_WINDOWS
 using System;
 using System.ServiceProcess;
 using System.Threading.Tasks;
@@ -15,7 +15,7 @@ namespace WinServiceInstaller
             {
                 FireStart?.Invoke();
             });
-            
+
         }
 
         protected override void OnStop()

@@ -19,6 +19,9 @@
   <PropertyGroup Condition="'$(TargetFramework)'=='net7.0-windows'">
     <DefineConstants>$(DefineConstants);NET7_0_WINDOWS</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)'=='net8.0-windows'">
+    <DefineConstants>$(DefineConstants);NET8_0_WINDOWS</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)|$(Platform)'=='netcoreapp3.0|AnyCPU'">
     <DefineConstants>$(DefineConstants);NETCOREAPP3_0</DefineConstants>
   </PropertyGroup>
@@ -37,13 +40,18 @@
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
   
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net8|AnyCPU'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+  
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|netcoreapp3.0|AnyCPU'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
   
  
-  <ItemGroup Condition="'$(TargetFramework)'=='net7.0-windows'">
+  <ItemGroup Condition="'$(TargetFramework)'=='net7.0-windows' or '$(TargetFramework)'=='net8.0-windows'">
     <PackageReference Include="Core.System.Configuration.Install" Version="1.1.0" />
     <PackageReference Include="Core.System.ServiceProcess" Version="2.0.1" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
