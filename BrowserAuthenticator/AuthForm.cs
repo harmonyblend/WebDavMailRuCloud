@@ -30,8 +30,9 @@ public partial class AuthForm : Form
     private string? _html;
     private List<CoreWebView2Cookie>? _cookieList;
     private WebView2? _webView2;
+    private Dictionary<string, string> _headers;
 
-    public AuthForm(string desiredLogin, string profile, bool manualCommit,
+    public AuthForm(Dictionary<string, string> headers, string desiredLogin, string profile, bool manualCommit,
         BrowserAppResult response, bool isYandexCloud, bool isMailCloud)
     {
         InitializeComponent();
@@ -46,11 +47,12 @@ public partial class AuthForm : Form
         _isYandexCloud = isYandexCloud;
         _isMailCloud = isMailCloud;
         _desiredLogin = desiredLogin;
+        _headers = headers;
         Text = $"Сервис WebDavMailRuCloud запрашивает вход в облако  \x2022  Профиль: {_profile}";
 
         StringBuilder sb = new StringBuilder("Сервису WebDavMailRuCloud требуется вход в облако. " +
             "Зайдите в облако для необходимой учетной записи и нажмите кнопку «Готово», или нажмите кнопку «Отказать».\r\n");
-        if (string.IsNullOrWhiteSpace(desiredLogin))
+        if (string.IsNullOrWhiteSpace(_desiredLogin))
         {
             sb.Append("Пользователь не указал логин (учетную запись или email) " +
                 "для определения облака и учетной записи в нем. " +
@@ -59,9 +61,9 @@ public partial class AuthForm : Form
         }
         else
         {
-            Text += $", учетная запись: «{desiredLogin}»";
+            Text += $", учетная запись: «{_desiredLogin}»";
 
-            sb.Append($"Пользователь указал login (учетную запись или email): «{desiredLogin}». ");
+            sb.Append($"Пользователь указал login (учетную запись или email): «{_desiredLogin}». ");
             if (_isYandexCloud || _isMailCloud)
             {
                 sb.Append(
@@ -139,6 +141,12 @@ public partial class AuthForm : Form
         _webView2.Dock = DockStyle.Fill;
         _webView2.CoreWebView2.NavigationCompleted += WebView_NavigationCompleted;
 
+        if (_headers.TryGetValue("user-agent", out string? userAgent) && !string.IsNullOrEmpty(userAgent))
+            _webView2.CoreWebView2.Settings.UserAgent = userAgent;
+
+        _webView2.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+        _webView2.CoreWebView2.WebResourceRequested += WebView_WebResourceRequested;
+
 
         ShowWindowDelay.Enabled = true;
 
@@ -149,6 +157,16 @@ public partial class AuthForm : Form
             _webView2.CoreWebView2.Navigate("https://disk.yandex.ru/client/disk");
         else
             _webView2.CoreWebView2.NavigateToString(Resources.start);
+    }
+
+    private void WebView_WebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        foreach (var headerPair in _headers)
+        {
+            if (headerPair.Key.Equals("user-agent", StringComparison.InvariantCultureIgnoreCase))
+                continue;
+            e.Request.Headers.SetHeader(headerPair.Key, headerPair.Value);
+        }
     }
 
     private void AuthForm_Load(object sender, EventArgs e)

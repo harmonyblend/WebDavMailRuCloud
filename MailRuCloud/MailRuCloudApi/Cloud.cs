@@ -72,22 +72,25 @@ namespace YaR.Clouds
                     AccountInfo = RequestRepo.AccountInfo().Result
                         ?? throw new AuthenticationException("The cloud server rejected the credentials provided");
                 }
-                catch (Exception e) when (Credentials.AuthenticationUsingBrowser &&
-                                          e.OfType<AuthenticationException>().Any())
+                catch (Exception e) when (!Credentials.AuthenticationUsingBrowser &&
+                                          !Credentials.AuthenticationUsingBrowserDisabled &&
+                                          e.Contains<AuthenticationException>() &&
+                                          e.Contains<InvalidCredentialException>())
                 {
-                    Logger.Warn("Refreshing credentials...");
+                    Logger.Warn("Cloud server requested for additional authentication for login & password, " +
+                        "browser authentication is not disabled, so going to ask the user to log in using BrowserAuthenticator.");
 
                     try
                     {
-                        if (!Credentials.Refresh())
+                        if (!Credentials.Refresh(forceBrowserAuthentication: true))
                         {
                             Logger.Warn("Credentials refreshing is failed");
                             throw;
                         }
                     }
-                    catch (Exception e2) when (e2.OfType<AuthenticationException>().Any())
+                    catch (Exception e2) when (e2.Contains<AuthenticationException>())
                     {
-                        Exception ae = e2.OfType<AuthenticationException>().FirstOrDefault();
+                        Exception ae = e2.FirstOfType<AuthenticationException>();
                         Logger.Error("Failed to refresh credentials");
                         throw new AuthenticationException(
                             "The cloud server rejected the credentials provided. Then failed to refresh credentials.", ae);
@@ -99,9 +102,46 @@ namespace YaR.Clouds
                         AccountInfo = RequestRepo.AccountInfo().Result
                             ?? throw new AuthenticationException("The cloud server rejected the credentials provided");
                     }
-                    catch (Exception e2) when (e2.OfType<AuthenticationException>().Any())
+                    catch (Exception e2) when (e2.Contains<AuthenticationException>())
                     {
-                        Exception ae = e2.OfType<AuthenticationException>().FirstOrDefault();
+                        Exception ae = e2.FirstOfType<AuthenticationException>();
+                        Logger.Error("The server rejected the credentials provided");
+                        throw new AuthenticationException(
+                            "The cloud server rejected the credentials provided. " +
+                            "Credentials have been updated. " +
+                            "Then the server rejected the credentials again. ", ae);
+                    }
+                }
+                catch (Exception e) when (Credentials.AuthenticationUsingBrowser &&
+                                          e.Contains<AuthenticationException>())
+                {
+                    Logger.Warn("Refreshing credentials...");
+
+                    try
+                    {
+                        if (!Credentials.Refresh())
+                        {
+                            Logger.Warn("Credentials refreshing is failed");
+                            throw;
+                        }
+                    }
+                    catch (Exception e2) when (e2.Contains<AuthenticationException>())
+                    {
+                        Exception ae = e2.FirstOfType<AuthenticationException>();
+                        Logger.Error("Failed to refresh credentials");
+                        throw new AuthenticationException(
+                            "The cloud server rejected the credentials provided. Then failed to refresh credentials.", ae);
+                    }
+
+                    // Проверка результата
+                    try
+                    {
+                        AccountInfo = RequestRepo.AccountInfo().Result
+                            ?? throw new AuthenticationException("The cloud server rejected the credentials provided");
+                    }
+                    catch (Exception e2) when (e2.Contains<AuthenticationException>())
+                    {
+                        Exception ae = e2.FirstOfType<AuthenticationException>();
                         Logger.Error("The server rejected the credentials provided");
                         throw new AuthenticationException(
                             "The cloud server rejected the credentials provided. " +

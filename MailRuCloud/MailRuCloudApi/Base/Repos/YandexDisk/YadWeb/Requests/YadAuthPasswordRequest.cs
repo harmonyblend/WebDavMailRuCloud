@@ -87,8 +87,10 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
             if (res.Result.State == "auth_challenge")
                 throw new AuthenticationException(
-                    "The account requires browser login with additional confirmation by SMS or QR code. " +
-                    "Please use BrowserAuthenticator application for this account.");
+                    "The account requires browser login with additional confirmation by SMS or QR code",
+                    // Добавление исключение данного типа является признаком чтобы попробовать аутентификацию через
+                    // BrowserAuthenticator, если нет явного запрета по наличию знака `!` перед логином.
+                    new InvalidCredentialException("Use the BrowserAuthenticator application for this account please"));
 
             if (res.Result.Status == "error" &&
                 res.Result.Errors.Count > 0)
@@ -96,15 +98,16 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
                 if (res.Result.Errors[0] == "captcha.required")
                 {
                     throw new AuthenticationException(
-                        "Authentication failed: captcha.required. " +
-                        "Use your browser application for several login and logout operations " +
-                        "until site stop asking for captcha during login.");
+                        "Authentication failed: captcha.required",
+                        // Добавление исключение данного типа является признаком чтобы попробовать аутентификацию через
+                        // BrowserAuthenticator, если нет явного запрета по наличию знака `!` перед логином.
+                        new InvalidCredentialException("Use the BrowserAuthenticator application for this account please"));
                 }
                 if (res.Result.Errors[0] == "password.not_matched")
                 {
                     throw new AuthenticationException(
                         "Authentication failed: password.not_matched. " +
-                        "The password you used to log in does not match with the main password of the account. " +
+                        "The password used to log in does not match with the main password of the account. " +
                         "Do not use 'Application Passwords' here, use the main account password only! " +
                         "In case you a sure you have used the main password, try to renew the main password.");
                 }

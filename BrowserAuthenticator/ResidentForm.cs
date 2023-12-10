@@ -2,12 +2,7 @@
 using System.Configuration;
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
-
-/*
- * Частично код взят отсюда:
- * https://gist.github.com/define-private-public/d05bc52dd0bed1c4699d49e2737e80e7
- */
+using Newtonsoft.Json;
 
 namespace BrowserAuthenticator;
 
@@ -16,14 +11,10 @@ public partial class ResidentForm : Form
     public static readonly string[] YandexDomains = { "yandex", "ya" };
     public static readonly string[] MailDomains = { "mail", "inbox", "bk", "list", "vk", "internet" };
 
-    [GeneratedRegex("https?://[^/]*/(?<login>.*?)/(?<password>.*?)/", RegexOptions.IgnoreCase)]
-    private static partial Regex CompiledUrlRegex();
-    private static readonly Regex UrlRegex = CompiledUrlRegex();
-
     private HttpListener? Listener;
     private bool RunServer = false;
     private string PreviousPort;
-    public delegate void Execute(string desiredLogin, BrowserAppResult response);
+    public delegate void Execute(string login, BrowserAppResult response, Dictionary<string, string> headers);
     public Execute AuthExecuteDelegate;
     private readonly int? SavedTop = null;
     private readonly int? SavedLeft = null;
@@ -223,8 +214,8 @@ public partial class ResidentForm : Form
 
         // Get the current configuration file.
         Configuration config =
-                ConfigurationManager.OpenExeConfiguration(
-                ConfigurationUserLevel.None);
+            ConfigurationManager.OpenExeConfiguration(
+            ConfigurationUserLevel.None);
 
         config.AppSettings.Settings.Remove("port");
         config.AppSettings.Settings.Remove("password");
@@ -286,10 +277,15 @@ public partial class ResidentForm : Form
     {
         SaveConfig();
         BrowserAppResult response = new BrowserAppResult();
-        OpenDialog(TestLogin.Text, response);
+        Dictionary<string, string> headers = new Dictionary<string, string>()
+        {
+            { "user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"},
+            { "sec-ch-ua", "\"Google Chrome\";v=\"119\", \"Chromium\";v=\"119\", \"Not?A_Brand\";v=\"24\""},
+        };
+        OpenDialog(TestLogin.Text, response, headers);
     }
 
-    private void OpenDialog(string desiredLogin, BrowserAppResult response)
+    private void OpenDialog(string desiredLogin, BrowserAppResult response, Dictionary<string,string> headers)
     {
         bool isYandexCloud = false;
         bool isMailCloud = false;
@@ -312,7 +308,7 @@ public partial class ResidentForm : Form
         //{
         //	new AuthForm( desiredLogin, response ).ShowDialog();
         //}, null );
-        new AuthForm(desiredLogin, profile, ManualCommit.Checked, response, isYandexCloud, isMailCloud).ShowDialog();
+        new AuthForm(headers, desiredLogin, profile, ManualCommit.Checked, response, isYandexCloud, isMailCloud).ShowDialog();
 
         if (response.Cookies != null)
             AuthenticationOkCounter++;
@@ -340,10 +336,17 @@ public partial class ResidentForm : Form
                 HttpListenerRequest req = ctx.Request;
                 using HttpListenerResponse resp = ctx.Response;
 
-                var match = UrlRegex.Match(req.Url?.AbsoluteUri ?? "");
+                using StreamReader reader = new StreamReader(req.InputStream);
+                var request = JsonConvert.DeserializeObject<BrowserAppRequest>(reader.ReadToEnd());
 
-                var login = Uri.UnescapeDataString(match.Success ? match.Groups["login"].Value : string.Empty);
-                var password = Uri.UnescapeDataString(match.Success ? match.Groups["password"].Value : string.Empty);
+                var login = request?.Login;
+                var password = request?.Password;
+
+                Dictionary<string, string> headers = new();
+                if (request?.UserAgent is not null )
+                    headers.Add("user-agent", request.UserAgent);
+                if (request?.SecChUa is not null)
+                    headers.Add("sec-ch-ua", request.SecChUa);
 
                 BrowserAppResult response = new BrowserAppResult();
 
@@ -360,9 +363,9 @@ public partial class ResidentForm : Form
                     _showBrowserLocker.Wait();
                     // Окно с браузером нужно открыть в потоке, обрабатывающем UI
                     if (TestButton.InvokeRequired)
-                        TestButton.Invoke(AuthExecuteDelegate, login, response);
+                        TestButton.Invoke(AuthExecuteDelegate, login, response, headers);
                     else
-                        AuthExecuteDelegate(login, response);
+                        AuthExecuteDelegate(login, response, headers);
                     _showBrowserLocker.Release();
                 }
 

@@ -182,26 +182,48 @@ namespace YaR.Clouds.Extensions
         /// </returns>
         public static IEnumerable<T> OfType<T>(this Exception exception, bool throwIfNotNotFound = false) where T : Exception
         {
-            if (exception is AggregateException ae)
+            bool found = false;
+            if (exception is not null)
             {
-                AggregateException flatten = ae.Flatten();
-                IEnumerable<T> result = flatten.InnerExceptions.OfType<T>();
-                if (throwIfNotNotFound && !result.Any())
-                    throw flatten;
-                return result;
-            }
-            else
-            {
-                if (exception is T item)
+                if (exception is T ex1)
                 {
-                    T[] array = new T[] { item };
-                    return array;
+                    found = true;
+                    yield return ex1;
                 }
 
-                if (throwIfNotNotFound)
-                    throw exception;
+                if (exception is AggregateException ae)
+                {
+                    for (int index = 0; index < ae.InnerExceptions.Count; index++)
+                    {
+                        Exception innerEx = ae.InnerExceptions[index];
+                        if (innerEx is T ex2)
+                        {
+                            found = true;
+                            yield return ex2;
+                        }
+                        if (innerEx.InnerException is not null)
+                        {
+                            foreach (var item in innerEx.OfType<T>(throwIfNotNotFound))
+                            {
+                                found = true;
+                                yield return item;
+                            };
+                        }
+                    }
+                }
+                else
+                if (exception.InnerException.InnerException is not null)
+                {
+                    foreach (var item in exception.InnerException.OfType<T>(throwIfNotNotFound))
+                    {
+                        found = true;
+                        yield return item;
+                    };
+                }
             }
-            return Enumerable.Empty<T>();
+
+            if (!found && throwIfNotNotFound)
+                throw exception;
         }
 
         /// <summary>Finds first occurrence of exception of the requested type.</summary>
@@ -232,24 +254,28 @@ namespace YaR.Clouds.Extensions
         /// </returns>
         public static T FirstOfType<T>(this Exception exception, bool throwIfNotNotFound = false) where T : Exception
         {
+            if (exception is null)
+                return null;
+
+            if (exception is T ex1)
+                return ex1;
+
             if (exception is AggregateException ae)
             {
-                AggregateException flatten = ae.Flatten();
-                T result = (T)flatten.InnerExceptions.FirstOrDefault(x => x is T);
-                if (throwIfNotNotFound && result is null)
-                    throw flatten;
-                return result;
+                for (int index = 0; index < ae.InnerExceptions.Count; index++)
+                {
+                    Exception innerEx = ae.InnerExceptions[index];
+                    if (innerEx.FirstOfType<T>() is T ex2)
+                        return ex2;
+                }
             }
             else
-            {
-                if (exception is T item)
-                {
-                    return item;
-                }
+            if (exception.InnerException.FirstOfType<T>() is T ex3)
+                return ex3;
 
-                if (throwIfNotNotFound)
-                    throw exception;
-            }
+            if (throwIfNotNotFound)
+                throw exception;
+
             return null;
         }
 
@@ -263,13 +289,26 @@ namespace YaR.Clouds.Extensions
         /// </returns>
         public static bool Contains<T>(this Exception exception) where T : Exception
         {
+            if(exception is null )
+                return false;
+
+            if (exception is T)
+                return true;
+
             if (exception is AggregateException ae)
             {
-                AggregateException flatten = ae.Flatten();
-                if (flatten.InnerExceptions.Any(x => x is T))
-                    return true;
+                for (int index = 0; index < ae.InnerExceptions.Count; index++)
+                {
+                    Exception innerEx = ae.InnerExceptions[index];
+                    if (innerEx.Contains<T>())
+                        return true;
+                }
             }
-            return exception is T;
+            else
+            if (exception.InnerException.Contains<T>())
+                return true;
+
+            return false;
         }
     }
 }

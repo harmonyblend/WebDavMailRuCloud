@@ -3,6 +3,26 @@ using Newtonsoft.Json;
 
 namespace YaR.Clouds.Base.Requests.Types;
 
+public class BrowserAppRequest
+{
+    [JsonProperty("login")]
+    public string Login { get; set; }
+
+    [JsonProperty("password")]
+    public string Password { get; set; }
+
+    [JsonProperty("user-agent")]
+    public string UserAgent { get; set; }
+
+    [JsonProperty("sec-ch-ua")]
+    public string SecChUa { get; set; }
+
+    public string Serialize()
+    {
+        return JsonConvert.SerializeObject(this);
+    }
+}
+
 public class BrowserAppResult
 {
     [JsonProperty("ErrorMessage")]

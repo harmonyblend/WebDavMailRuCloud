@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
+using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using YaR.Clouds.Base.Repos.MailRuCloud;
@@ -32,6 +33,7 @@ public partial class Credentials : IBasicCredentials
     public bool CanCrypt => !string.IsNullOrEmpty(PasswordCrypt);
 
     public bool AuthenticationUsingBrowser { get; private set; }
+    public bool AuthenticationUsingBrowserDisabled { get; private set; }
 
 
     #region На текущий момент специфично только для Янднекс.Диска
@@ -167,6 +169,7 @@ public partial class Credentials : IBasicCredentials
             Login = Login.Remove(0, 1).Trim();
 
         AuthenticationUsingBrowser = false;
+        AuthenticationUsingBrowserDisabled = browserAuthenticatorDisabled;
 
         if (browserAuthenticatorAsked && CloudType != CloudType.Mail)
         {
@@ -293,7 +296,7 @@ public partial class Credentials : IBasicCredentials
             {
                 response = await MakeLogin().ConfigureAwait(false);
             }
-            catch (Exception e) when (e.OfType<HttpRequestException>().Any())
+            catch (Exception e) when (e.Contains<HttpRequestException>())
             {
                 Logger.Error("Browser authentication failed! " +
                     "Please check browser authentication component is running!");
@@ -302,7 +305,7 @@ public partial class Credentials : IBasicCredentials
             }
             catch (Exception e)
             {
-                if (e.OfType<AuthenticationException>() is AuthenticationException ae)
+                if (e.FirstOfType<AuthenticationException>() is AuthenticationException ae)
                 {
                     string txt = string.Concat("Browser authentication failed! ", ae.Message);
                     Logger.Error(txt);
@@ -320,7 +323,8 @@ public partial class Credentials : IBasicCredentials
             Logger.Info($"Browser authentication successful");
 
             // Сохраняем новый куки, если задан путь для кеша
-            if (!string.IsNullOrEmpty(_settings.BrowserAuthenticatorCacheDir))
+            if (!string.IsNullOrEmpty(_settings.BrowserAuthenticatorCacheDir) &&
+                AuthenticationUsingBrowser)
             {
                 string fileName = string.IsNullOrWhiteSpace(Login) ? "anonymous" : Login;
                 string path = GetPath(_settings.BrowserAuthenticatorCacheDir, fileName);
@@ -406,7 +410,7 @@ public partial class Credentials : IBasicCredentials
     /// <para>Возвращает false, если обновление не прошло и надо отправить исключение.</para>
     /// </summary>
     /// <returns></returns>
-    public bool Refresh()
+    public bool Refresh(bool forceBrowserAuthentication = false)
     {
         if (!string.IsNullOrEmpty(_settings.BrowserAuthenticatorCacheDir))
         {
@@ -423,7 +427,8 @@ public partial class Credentials : IBasicCredentials
                 Logger.Error($"Error deleting cookie file {path}: {ex.Message}");
             }
         }
-        if (AuthenticationUsingBrowser)
+        if ((AuthenticationUsingBrowser || forceBrowserAuthentication) &&
+           !AuthenticationUsingBrowserDisabled)
         {
             Protocol saveProtocol = Protocol;
             CloudType saveCloudType = CloudType;
@@ -451,25 +456,33 @@ public partial class Credentials : IBasicCredentials
     private async Task<(BrowserAppResult, string)> ConnectToBrowserApp()
     {
         string url = _settings.BrowserAuthenticatorUrl;
-        string password = string.IsNullOrWhiteSpace(Password)
-            ? _settings.BrowserAuthenticatorPassword
-            : Password;
 
         if (string.IsNullOrEmpty(url))
         {
-            throw new AuthenticationException("Error connecting to browser authenticator application. " +
+            throw new AuthenticationException(
+                "Error connecting to browser authenticator application. " +
                 "Check the BrowserAuthenticator is running and have correct port.");
         }
 
         using var client = new HttpClient { BaseAddress = new Uri(url) };
+        var req = new BrowserAppRequest()
+        {
+            Login = Login,
+            Password = string.IsNullOrWhiteSpace(Password) || !AuthenticationUsingBrowser
+                       ? _settings.BrowserAuthenticatorPassword
+                       : Password,
+            UserAgent = _settings.UserAgent,
+            SecChUa = _settings.SecChUa,
+        };
         var httpRequestMessage = new HttpRequestMessage
         {
-            Method = HttpMethod.Get,
-            RequestUri = new Uri($"/{Uri.EscapeDataString(Login)}/{Uri.EscapeDataString(password)}/", UriKind.Relative),
+            Method = HttpMethod.Post,
+            RequestUri = new Uri("/", UriKind.Relative),
             Headers = {
                 { HttpRequestHeader.Accept.ToString(), "application/json" },
                 { HttpRequestHeader.ContentType.ToString(), "application/json" },
             },
+            Content = new StringContent(req.Serialize(), Encoding.UTF8, "application/json")
         };
 
         client.Timeout = new TimeSpan(0, 5, 0);
@@ -512,8 +525,10 @@ public partial class Credentials : IBasicCredentials
                 Cookies.Add(cookie);
             }
 
-            // Если аутентификация прошла успешно, сохраняем результат в кеш в файл
-            if (!string.IsNullOrEmpty(_settings.BrowserAuthenticatorCacheDir))
+            // Если аутентификация прошла успешно, сохраняем результат в кеш в файл,
+            // но только если запрошена аутентификация через браузер
+            if (!string.IsNullOrEmpty(_settings.BrowserAuthenticatorCacheDir) &&
+                AuthenticationUsingBrowser)
             {
                 string path = GetPath(_settings.BrowserAuthenticatorCacheDir, Login);
 

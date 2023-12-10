@@ -14,7 +14,7 @@
     <Company />
     <Product>WebDAVCloudMailRu</Product>
     <Copyright>MIT License, Copyright (c) 2023 YaR229 and Contributors</Copyright>
-    <Description>WebDAV emulator for RU-clouds: Cloud.Mail.Ru &quot; Disk.Yandex.Ru</Description>
+    <Description>WebDAV emulator for RU-clouds: Cloud.Mail.Ru &amp; Disk.Yandex.Ru</Description>
     <PackageId>WebDAVCloudMailRu</PackageId>
     <AssemblyVersion>$(ReleaseVersion)</AssemblyVersion>
     <FileVersion>$(ReleaseVersion)</FileVersion>
@@ -26,7 +26,7 @@
     <PackageProjectUrl>https://github.com/yar229/WebDavMailRuCloud</PackageProjectUrl>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
     <RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
-    <Title>WebDAV emulator for RU-clouds: Cloud.Mail.Ru &quot; Disk.Yandex.Ru</Title>
+    <Title>WebDAV emulator for RU-clouds: Cloud.Mail.Ru &amp; Disk.Yandex.Ru</Title>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
