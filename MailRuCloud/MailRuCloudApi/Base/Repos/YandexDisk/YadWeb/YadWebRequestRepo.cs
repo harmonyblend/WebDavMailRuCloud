@@ -473,14 +473,21 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             //var req = await new YadDeleteRequest(HttpSettings, (YadWebAuth)Authenticator, fullPath)
             //    .MakeRequestAsync(_connectionLimiter);
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
-                .With(new YadDeletePostModel(fullPath),
-                    out YadResponseModel<YadDeleteRequestData, YadDeleteRequestParams> itemInfo)
+            await new YaDCommonV2Request(HttpSettings, (YadWebAuth)Auth)
+                .With(new YadBulkAsyncDelete(fullPath),
+                    out YadResponseModel<YadBulkAsyncDeleteRequestData, YadBulkAsyncDeleteRequestParams> itemInfo)
                 .MakeRequestAsync(_connectionLimiter);
 
-            var res = itemInfo.ToRemoveResult();
+            // TODO: wait op finish
 
-            OnRemoveCompleted(res, itemInfo?.Data?.OpId);
+            var res =  new RemoveResult
+            {
+                IsSuccess = true,
+                DateTime = DateTime.Now,
+                Path = fullPath
+            };
+
+            OnRemoveCompleted(res, ""); // itemInfo?.Data?.OpId ???
 
             return res;
         }
