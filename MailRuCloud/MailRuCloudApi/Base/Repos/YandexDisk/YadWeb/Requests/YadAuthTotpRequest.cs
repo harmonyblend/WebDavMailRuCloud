@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
 using System.Security.Cryptography;
+using System.Threading;
 using Newtonsoft.Json;
 using YaR.Clouds.Base.Requests;
 
@@ -56,8 +57,12 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
             var totp = new Totp(bytes);
 
-            var result = totp.ComputeTotp();
             var remainingTime = totp.RemainingSeconds();
+            if (remainingTime <= 3)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(4));
+            }
+            var result = totp.ComputeTotp();            
 
 
             var keyValues = new List<KeyValuePair<string, string>>

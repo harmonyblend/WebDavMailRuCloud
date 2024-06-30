@@ -473,21 +473,48 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             //var req = await new YadDeleteRequest(HttpSettings, (YadWebAuth)Authenticator, fullPath)
             //    .MakeRequestAsync(_connectionLimiter);
 
-            await new YaDCommonV2Request(HttpSettings, (YadWebAuth)Auth)
+            var response = await new YaDCommonV2Request(HttpSettings, (YadWebAuth)Auth)
                 .With(new YadBulkAsyncDelete(fullPath),
                     out YadResponseModel<YadBulkAsyncDeleteRequestData, YadBulkAsyncDeleteRequestParams> itemInfo)
                 .MakeRequestAsync(_connectionLimiter);
 
-            // TODO: wait op finish
-
-            var res =  new RemoveResult
+            var res = new RemoveResult
             {
                 IsSuccess = true,
                 DateTime = DateTime.Now,
                 Path = fullPath
             };
+            
+            var opid = "";
+            if (response.Length == 0 || String.IsNullOrEmpty(response[0].OpId))
+            {
+                res.IsSuccess = false;
+            }
+            else
+            {
+                opid = response[0].OpId;
+            }
 
-            OnRemoveCompleted(res, ""); // itemInfo?.Data?.OpId ???
+            // TODO: wait operation finish and check it result
+            /*
+            https://disk.yandex.ru/models-v2?m=mpfs/bulk-operation-status
+            {"sk":"sk:time","connection_id":"____________________","apiMethod":"mpfs/bulk-operation-status","requestParams":{"oids":["_opid______________________________________________"]}}
+            ->
+            {
+                "_opid______________________________________________": {
+                    "status": "EXECUTING" | "DONE" | "SOMETHING_IF_ERROR",
+                    "params": {
+                        "path": "_id____:/disk/path/to/delete"
+                    },
+                    "state": "EXECUTING" | "COMPLETED",
+                    "at_version": 00000000000,
+                    "type": "trash",
+                    "resource": undefined | complex_object_at_done
+                }
+            }
+            */
+
+            OnRemoveCompleted(res, opid);
 
             return res;
         }
