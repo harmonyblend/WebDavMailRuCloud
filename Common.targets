@@ -2,6 +2,6 @@
 	<PropertyGroup>
 		<CommonTargetFrameworks>net8.0-windows;net7.0-windows;net48;netcoreapp3.1;net5.0;net6.0;net7.0;net8.0</CommonTargetFrameworks>
 		<CommonLangVersion>latest</CommonLangVersion>
-		<ReleaseVersion>1.14.2.1</ReleaseVersion>
+		<ReleaseVersion>1.15.0.0</ReleaseVersion>
 	</PropertyGroup>
 </Project>
