@@ -88,13 +88,13 @@ namespace YaR.Clouds.WebDavStore.StoreBase
 
                 FileInfo.OriginalSize = new FileSize(memStream.Length);
 
-                using (var outputStream = IsWritable
-                    ? await CloudManager.Instance(httpContext.Session.Principal.Identity).GetFileUploadStream(FileInfo.FullPath, FileInfo.Size, null, null).ConfigureAwait(false)
-                    : null)
-                {
-                    memStream.Seek(0, SeekOrigin.Begin);
-                    await memStream.CopyToAsync(outputStream).ConfigureAwait(false);
-                }
+                using var outputStream = IsWritable
+                    ? await CloudManager
+                                .Instance(httpContext.Session.Principal.Identity)
+                                .GetFileUploadStream(FileInfo.FullPath, FileInfo.Size, null, null).ConfigureAwait(false)
+                    : null;
+                memStream.Seek(0, SeekOrigin.Begin);
+                await memStream.CopyToAsync(outputStream).ConfigureAwait(false);
                 return DavStatusCode.Ok;
             }
 

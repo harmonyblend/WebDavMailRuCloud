@@ -115,29 +115,39 @@ namespace YaR.Clouds.Base.Streams
             });
 
             var client = HttpClientFabric.Instance[_cloud];
-            var uploadFileResult = _cloud.RequestRepo.DoUpload(client, pushContent, _file).Result;
-
-            if (uploadFileResult.HttpStatusCode != HttpStatusCode.Created &&
-                uploadFileResult.HttpStatusCode != HttpStatusCode.OK)
-                throw new Exception("Cannot upload file, status " + uploadFileResult.HttpStatusCode);
-
-            // 2020-10-26 mail.ru does not return file size now
-            //if (uploadFileResult.HasReturnedData && _file.OriginalSize != uploadFileResult.Size)
-            //    throw new Exception("Local and remote file size does not match");
-
-            _file.Hash = uploadFileResult.HasReturnedData switch
+            DateTime timestampBeforeOperation = DateTime.Now;
+            try
             {
-                true when CheckHashes && null != uploadFileResult.Hash && _cloudFileHasher != null &&
-                          _cloudFileHasher.Hash.Hash.Value != uploadFileResult.Hash.Hash.Value => throw
-                    new HashMatchException(_cloudFileHasher.Hash.ToString(), uploadFileResult.Hash.ToString()),
-                true => uploadFileResult.Hash,
-                _ => _file.Hash
-            };
+                _cloud.OnBeforeUpload(_file.FullPath);
 
-            if (uploadFileResult.NeedToAddFile)
-                _cloud.AddFileInCloud(_file, ConflictResolver.Rewrite)
-                    .Result
-                    .ThrowIf(r => !r.Success, _ => new Exception($"Cannot add file {_file.FullPath}"));
+                var uploadFileResult = _cloud.RequestRepo.DoUpload(client, pushContent, _file).Result;
+
+                if (uploadFileResult.HttpStatusCode != HttpStatusCode.Created &&
+                    uploadFileResult.HttpStatusCode != HttpStatusCode.OK)
+                    throw new Exception("Cannot upload file, status " + uploadFileResult.HttpStatusCode);
+
+                // 2020-10-26 mail.ru does not return file size now
+                //if (uploadFileResult.HasReturnedData && _file.OriginalSize != uploadFileResult.Size)
+                //    throw new Exception("Local and remote file size does not match");
+
+                _file.Hash = uploadFileResult.HasReturnedData switch
+                {
+                    true when CheckHashes && null != uploadFileResult.Hash && _cloudFileHasher != null &&
+                              _cloudFileHasher.Hash.Hash.Value != uploadFileResult.Hash.Hash.Value => throw
+                        new HashMatchException(_cloudFileHasher.Hash.ToString(), uploadFileResult.Hash.ToString()),
+                    true => uploadFileResult.Hash,
+                    _ => _file.Hash
+                };
+
+                if (uploadFileResult.NeedToAddFile)
+                    _cloud.AddFileInCloud(_file, ConflictResolver.Rewrite)
+                        .Result
+                        .ThrowIf(r => !r.Success, _ => new Exception($"Cannot add file {_file.FullPath}"));
+            }
+            finally
+            {
+                _cloud.OnAfterUpload(_file.FullPath, timestampBeforeOperation);
+            }
         }
 
         public bool CheckHashes { get; set; } = true;

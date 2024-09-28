@@ -15,6 +15,8 @@ using YaR.Clouds.Base.Streams;
 using YaR.Clouds.Common;
 using Stream = System.IO.Stream;
 
+// Yandex has API version 378.1.0
+
 namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 {
     class YadWebRequestRepo2 : YadWebRequestRepo
@@ -291,7 +293,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
         protected override void OnMoveCompleted(CopyResult res, string operationOpId) => WaitForOperation(operationOpId);
 
-        protected override void OnRemoveCompleted(RemoveResult res, string operationOpId) => WaitForOperation(operationOpId);
+        protected override void OnRemoveCompleted(RemoveResult res, string operationOpId) => WaitForOperation2(operationOpId);
 
         protected override void OnRenameCompleted(RenameResult res, string operationOpId) => WaitForOperation(operationOpId);
 
@@ -324,7 +326,73 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                      *         "target": "12-it's_uid-34:/disk/destination-folder"
                      *    },
                      */
-                    var doAgain = itemInfo.Data.Error is null && itemInfo.Data.State != "COMPLETED";
+                    var doAgain = itemInfo?.Data?.Error is null && itemInfo?.Data?.State != "COMPLETED";
+                    if (doAgain)
+                    {
+                        if (flagWatch.Elapsed > TimeSpan.FromSeconds(30))
+                        {
+                            Logger.Debug("Operation is still in progress, let's wait...");
+                            flagWatch.Restart();
+                        }
+                    }
+                    return doAgain;
+                },
+                TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryTimeout);
+        }
+
+        protected void WaitForOperation2(string operationOpId)
+        {
+            if (string.IsNullOrWhiteSpace(operationOpId))
+                return;
+
+            var flagWatch = Stopwatch.StartNew();
+
+            //YadResponseModel<YadOperationStatusData, YadOperationStatusParams> itemInfo = null;
+            YadOperationStatusV2 itemInfo = new YadOperationStatusV2(operationOpId);
+            Retry.Do(
+                () => TimeSpan.Zero,
+                () => new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                    .With(itemInfo)
+                    .MakeRequestAsync(_connectionLimiter)
+                    .Result,
+                _ =>
+                {
+                    /*
+                     * Яндекс повторяет проверку при переносе папки каждый 9 секунд.
+                     * Когда операция завершилась: "status": "DONE", "state": "COMPLETED", "type": "move"
+                     *    "params": {
+                     *         "source": "12-it's_uid-34:/disk/source-folder",
+                     *         "target": "12-it's_uid-34:/disk/destination-folder"
+                     *    },
+                     * Когда операция еще в процессе: "status": "EXECUTING", "state": "EXECUTING", "type": "move"
+                     *    "params": {
+                     *         "source": "12-it's_uid-34:/disk/source-folder",
+                     *         "target": "12-it's_uid-34:/disk/destination-folder"
+                     *    },
+                     */
+
+                    if (itemInfo is null)
+                        throw new NullReferenceException("WaitForOperation2 itemInfo is null");
+
+                    if (itemInfo.Errors is not null)
+                    {
+                        foreach (var error in itemInfo.Errors)
+                        {
+                            Logger.Error($"WaitForOperation2 error: {error.Error.Code} {error.Error.Title}");
+                        }
+                        return true;
+                    }
+
+                    if (!itemInfo.Result.TryGetValue(operationOpId, out var state))
+                    {
+                        Logger.Error($"WaitForOperation2 failure: operation {operationOpId} is not registered");
+                        return true;
+                    }
+
+                    var doAgain = state.State != "COMPLETED";
+
+                    //Logger.Debug($"WaitForOperation2: doAgain={doAgain}, Oid={operationOpId}");
+
                     if (doAgain)
                     {
                         if (flagWatch.Elapsed > TimeSpan.FromSeconds(30))
@@ -342,11 +410,19 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
         {
             YadResponseModel<List<YadActiveOperationsData>, YadActiveOperationsParams> itemInfo = null;
 
-            _ = await new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
+            var task1 = new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
                     .With(new YadActiveOperationsPostModel(), out itemInfo)
-                    .With(new YadAccountInfoPostModel(),
-                        out YadResponseModel<YadAccountInfoRequestData, YadAccountInfoRequestParams> accountInfo)
+                    //.With(new YadAccountInfoPostModel(),
+                    //    out YadResponseModel<YadAccountInfoRequestData, YadAccountInfoRequestParams> accountInfo)
                     .MakeRequestAsync(_connectionLimiter);
+
+            // Надо учитывать, что счетчики обновляются через 10-15 секунд после операции
+            var task2 = new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                    .With(new JournalCountersV2(), out var journalCounters)
+                    .MakeRequestAsync(_connectionLimiter);
+
+            Task.WaitAll(task1, task2);
+
 
             var list = itemInfo?.Data?
                 .Select(x => new ActiveOperation
@@ -358,13 +434,16 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                     TargetPath = DtoImportYadWeb.GetOpPath(x.Data.Target),
                 })?.ToList();
 
+            var counters = journalCounters?.Result?.EventTypes;
+
             var info = new CheckUpInfo
             {
                 AccountInfo = new CheckUpInfo.CheckInfo
                 {
-                    FilesCount = accountInfo?.Data?.FilesCount ?? 0,
-                    Free = accountInfo?.Data?.Free ?? 0,
-                    Trash = accountInfo?.Data?.Trash ?? 0,
+                    //FilesCount = accountInfo?.Data?.FilesCount ?? 0,
+                    //Free = accountInfo?.Data?.Free ?? 0,
+                    //Trash = accountInfo?.Data?.Trash ?? 0,
+                    JournalCounters = new JournalCounters(journalCounters.Result)
                 },
                 ActiveOperations = list,
             };

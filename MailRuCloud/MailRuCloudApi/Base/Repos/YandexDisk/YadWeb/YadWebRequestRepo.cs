@@ -161,6 +161,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                         hash?.HashMd5.Value ?? string.Empty),
                     out YadResponseModel<ResourceUploadUrlData, ResourceUploadUrlParams> itemInfo)
                 .MakeRequestAsync(_connectionLimiter).Result;
+
+            if (itemInfo.Error is not null)
+                throw new Exception($"Error: {itemInfo.Error.Id}, {itemInfo.Error.Message})");
             var url = itemInfo.Data.UploadUrl;
 
             var request = new HttpRequestMessage
@@ -172,8 +175,16 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             request.Headers.Add("Accept", "*/*");
             request.Headers.TryAddWithoutValidation("User-Agent", HttpSettings.UserAgent);
 
+            /*
+             * Пробуем разные варианты решения ошибки вида
+             * Sent 3014656 request content bytes, but Content-Length promised 117811349.
+             * в методе DoUpload в строке var responseMessage = await client.SendAsync(request);
+             * Включаем Chunked и выключаем установки ContentLength, пусть framework сам считает.
+             */
+            request.Headers.TransferEncodingChunked = true;
+
             request.Content = content;
-            request.Content.Headers.ContentLength = file.OriginalSize;
+            //request.Content.Headers.ContentLength = file.OriginalSize;
 
             return (request, itemInfo?.Data?.OpId);
         }
@@ -473,14 +484,29 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             //var req = await new YadDeleteRequest(HttpSettings, (YadWebAuth)Authenticator, fullPath)
             //    .MakeRequestAsync(_connectionLimiter);
 
-            await new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
-                .With(new YadDeletePostModel(fullPath),
-                    out YadResponseModel<YadDeleteRequestData, YadDeleteRequestParams> itemInfo)
+            //await new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
+            //    .With(new YadDeletePostModel(fullPath),
+            //        out YadResponseModel<YadDeleteRequestData, YadDeleteRequestParams> itemInfo)
+            //    .MakeRequestAsync(_connectionLimiter);
+            await new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                .With(new YadDeletePostModelV2(fullPath), out var itemInfo)
                 .MakeRequestAsync(_connectionLimiter);
 
-            var res = itemInfo.ToRemoveResult();
+            //var res = itemInfo.ToRemoveResult();
+            RemoveResult res = new RemoveResult()
+            {
+                DateTime = DateTime.Now,
+                IsSuccess = itemInfo?.Errors is null,
+                Path = fullPath
+            };
 
-            OnRemoveCompleted(res, itemInfo?.Data?.OpId);
+            if (itemInfo?.Errors is null && itemInfo?.Result is not null)
+            {
+                string oid = itemInfo.Result;
+                Logger.Debug($"{fullPath} уделен, Oid={oid}");
+
+                OnRemoveCompleted(res, oid);
+            }
 
             return res;
         }
