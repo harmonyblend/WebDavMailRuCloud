@@ -15,7 +15,7 @@ namespace YaR.Clouds.Console
 
             var exitCode = result
                 .MapResult(
-                    options =>
+                    (CommandLineOptions options) =>
                     {
                         _c = new ServiceConfigurator
                         {
