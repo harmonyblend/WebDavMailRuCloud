@@ -8,7 +8,7 @@ namespace YaR.Clouds
         public const string SharedFilePostfix = ".share.wdmrc";
         public const string PlayListFilePostfix = ".m3u8";
 
-        public List<PublishInfoItem> Items { get; }  = new();
+        public List<PublishInfoItem> Items { get; }  = [];
         public DateTime DateTime { get; set; } = DateTime.Now;
     }
 

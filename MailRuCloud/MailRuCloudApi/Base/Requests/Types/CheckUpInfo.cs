@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models;
 
 namespace YaR.Clouds.Base.Requests.Types;
@@ -42,6 +43,8 @@ public enum CounterOperation
 
 public class JournalCounters
 {
+    private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(JournalCounters));
+
     /// <summary>Удаление навсегда</summary>
     public long RemoveCounter = 0;
     public const string RemoveCounterStr = "fs-rm";
@@ -125,57 +128,71 @@ public class JournalCounters
         case CounterOperation.None:
             break;
         case CounterOperation.Remove:
-            RemoveCounter++;
+            Interlocked.Increment(ref RemoveCounter);
             break;
         case CounterOperation.Rename:
-            RenameCounter++;
+            Interlocked.Increment(ref RenameCounter);
             break;
         case CounterOperation.Move:
-            MoveCounter++;
+            Interlocked.Increment(ref MoveCounter);
             break;
         case CounterOperation.Copy:
-            CopyCounter++;
+            Interlocked.Increment(ref CopyCounter);
             break;
         case CounterOperation.Upload:
-            UploadCounter++;
+            Interlocked.Increment(ref UploadCounter);
+            //Logger.Warn($"UploadCounter->{UploadCounter}");
             break;
         case CounterOperation.TakeSomeonesFolder:
-            TakeSomeonesFolderCounter++;
+            Interlocked.Increment(ref TakeSomeonesFolderCounter);
             break;
         case CounterOperation.NewFolder:
-            NewFolderCounter++;
+            Interlocked.Increment(ref NewFolderCounter);
             break;
         //case CounterOperation.Update:
         //    UpdateCounter++;
         //    break;
         case CounterOperation.RemoveToTrash:
-            RemoveToTrashCounter++;
+            Interlocked.Increment(ref RemoveToTrashCounter);
+            //Logger.Warn($"RemoveToTrashCounter->{RemoveToTrashCounter}");
             break;
         case CounterOperation.RestoreFromTrash:
-            RestoreFromTrashCounter++;
+            Interlocked.Increment(ref RestoreFromTrashCounter);
             break;
         case CounterOperation.TrashDropItem:
-            TrashDropItemCounter++;
+            Interlocked.Increment(ref TrashDropItemCounter);
             break;
         case CounterOperation.TrashDropAll:
-            TrashDropAllCounter++;
+            Interlocked.Increment(ref TrashDropAllCounter);
             break;
         }
     }
 
     public void TakeMax(JournalCounters src)
     {
-        RemoveCounter = Math.Max(RemoveCounter, src.RemoveCounter);
-        RenameCounter = Math.Max(RenameCounter, src.RenameCounter);
-        MoveCounter = Math.Max(MoveCounter, src.MoveCounter);
-        CopyCounter = Math.Max(CopyCounter, src.CopyCounter);
-        UploadCounter = Math.Max(UploadCounter, src.UploadCounter);
-        TakeSomeonesFolderCounter = Math.Max(TakeSomeonesFolderCounter, src.TakeSomeonesFolderCounter);
-        NewFolderCounter = Math.Max(NewFolderCounter, src.NewFolderCounter);
-        //UpdateCounter = Math.Max(UpdateCounter, src.UpdateCounter);
-        RemoveToTrashCounter = Math.Max(RemoveToTrashCounter, src.RemoveToTrashCounter);
-        RestoreFromTrashCounter = Math.Max(RestoreFromTrashCounter, src.RestoreFromTrashCounter);
-        TrashDropItemCounter = Math.Max(TrashDropItemCounter, src.TrashDropItemCounter);
-        TrashDropAllCounter = Math.Max(TrashDropAllCounter, src.TrashDropAllCounter);
+        if(RemoveCounter<src.RemoveCounter)
+            Interlocked.Exchange(ref RemoveCounter, src.RemoveCounter);
+        if (RenameCounter < src.RenameCounter)
+            Interlocked.Exchange(ref RenameCounter, src.RenameCounter);
+        if (MoveCounter < src.MoveCounter)
+            Interlocked.Exchange(ref MoveCounter, src.MoveCounter);
+        if (CopyCounter < src.CopyCounter)
+            Interlocked.Exchange(ref CopyCounter, src.CopyCounter);
+        if (UploadCounter < src.UploadCounter)
+            Interlocked.Exchange(ref UploadCounter, src.UploadCounter);
+        if (TakeSomeonesFolderCounter < src.TakeSomeonesFolderCounter)
+            Interlocked.Exchange(ref TakeSomeonesFolderCounter, src.TakeSomeonesFolderCounter);
+        if (NewFolderCounter < src.NewFolderCounter)
+            Interlocked.Exchange(ref NewFolderCounter, src.NewFolderCounter);
+        //if (UpdateCounter < src.UpdateCounter)
+        //    Interlocked.Exchange(ref UpdateCounter, src.UpdateCounter);
+        if (RemoveToTrashCounter < src.RemoveToTrashCounter)
+            Interlocked.Exchange(ref RemoveToTrashCounter, src.RemoveToTrashCounter);
+        if (RestoreFromTrashCounter < src.RestoreFromTrashCounter)
+            Interlocked.Exchange(ref RestoreFromTrashCounter, src.RestoreFromTrashCounter);
+        if (TrashDropItemCounter < src.TrashDropItemCounter)
+            Interlocked.Exchange(ref TrashDropItemCounter, src.TrashDropItemCounter);
+        if (TrashDropAllCounter < src.TrashDropAllCounter)
+            Interlocked.Exchange(ref TrashDropAllCounter, src.TrashDropAllCounter);
     }
 };

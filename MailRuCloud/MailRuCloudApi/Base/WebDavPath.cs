@@ -14,10 +14,10 @@ namespace YaR.Clouds.Base
 
         public static string Combine(string a, string b)
         {
-            if (a == null)
+            if (a is null)
                 throw new ArgumentNullException(nameof(a));
 
-            if (b == null)
+            if (b is null)
                 return Clean(a, false);
 
             StringBuilder right = CleanSb(b, false);

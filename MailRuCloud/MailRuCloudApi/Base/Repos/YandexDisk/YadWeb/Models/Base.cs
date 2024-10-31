@@ -97,6 +97,18 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         public YadModelDataError Error { get; set; }
     }
 
+    public class YadModelDataBaseErrorStruct
+    {
+        [JsonProperty("error")]
+        public YadModelDataError2 Error { get; set; }
+    }
+
+    public class YadModelDataBaseErrorString
+    {
+        [JsonProperty("error")]
+        public string ErrorToken { get; set; }
+    }
+
     public class YadModelDataError
     {
         [JsonProperty("id")]
@@ -117,4 +129,26 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         [JsonProperty("title")]
         public string Title { get; set; }
     }
+
+    public class YadModelDataError2
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; }
+
+        //[JsonProperty("body")]
+        //public YadModelDataErrorBody Body { get; set; }
+
+        [JsonProperty("type")]
+        public string Type { get; set; }
+
+        [JsonProperty("statusCode")]
+        public int StatusCode { get; set; }
+
+        [JsonProperty("code")]
+        public long Code { get; set; }
+
+        [JsonProperty("title")]
+        public string Title { get; set; }
+    }
+
 }

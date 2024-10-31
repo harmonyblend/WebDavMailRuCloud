@@ -112,8 +112,11 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
                 //}
             });
 
-            Model.Deserialize(text);
             Model.SourceJsonForDebug = text;
+            if (Model.ResultType == typeof(void))
+                Model.ResultObject = null;
+            else
+                Model.Deserialize(text);
 
             if (Model.Errors is not null && Model.Errors.Count == 0)
                 Model.Errors = null;

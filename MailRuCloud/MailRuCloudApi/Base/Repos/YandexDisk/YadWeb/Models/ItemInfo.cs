@@ -34,7 +34,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
         }
     }
 
-    class YadItemInfoRequestData : YadModelDataBase
+    class YadItemInfoRequestData : YadModelDataBaseErrorStruct
     {
         [JsonProperty("ctime")]
         public long Ctime { get; set; }

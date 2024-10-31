@@ -16,6 +16,8 @@ using YaR.Clouds.Common;
 using Stream = System.IO.Stream;
 
 // Yandex has API version 378.1.0
+// Yandex has API version 382.2.0
+// Yandex has API version 383.0.0
 
 namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 {
@@ -131,12 +133,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             if (path.Path.StartsWith(YadMediaPath))
                 return await MediaFolderInfo(path.Path);
 
-            // YaD perform async deletion
-            YadResponseModel<YadItemInfoRequestData, YadItemInfoRequestParams> itemInfo = null;
-            YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderInfo = null;
-            YadResponseModel<YadResourceStatsRequestData, YadResourceStatsRequestParams> resourceStats = null;
-            YadResponseModel<List<YadActiveOperationsData>, YadActiveOperationsParams> activeOps = null;
-
             /*
              * Не менее 1 параллельного потока,
              * не более доступного по ограничителю за вычетом одного для соседних запросов,
@@ -148,10 +144,41 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
             Logger.Debug($"Listing path {path.Path}");
 
+            YadResponseModel<YadItemInfoRequestData, YadItemInfoRequestParams> itemInfo = null;
             Retry.Do(
                 () => TimeSpan.Zero,
                 () => new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
                     .With(new YadItemInfoPostModel(path.Path), out itemInfo)
+                    .MakeRequestAsync(_connectionLimiter)
+                    .Result,
+                _ => false,
+                TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryTimeout);
+
+
+            if (itemInfo is null)
+                throw new IOException("Error reading file or directory information from server");
+            if( itemInfo.Error is not null)
+                throw new IOException($"Error reading file or directory information from server {itemInfo.Error.Message}");
+            if (itemInfo.Data is null)
+                throw new IOException($"Error reading file or directory information from server");
+            if ((itemInfo?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404")
+                throw new IOException($"Error reading file or directory information from server {itemInfo.Data.Error.Title}");
+
+            // directory entiry is missing
+            if (itemInfo.Data.Type is null)
+                return null;
+
+            // it's a file
+            if (itemInfo.Data.Type == "file")
+                return itemInfo.Data.ToFile(PublicBaseUrlDefault);
+
+            // it's a folder
+            YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderInfo = null;
+            YadResponseModel<YadResourceStatsRequestData, YadResourceStatsRequestParams> resourceStats = null;
+            YadResponseModel<List<YadActiveOperationsData>, YadActiveOperationsParams> activeOps = null;
+            Retry.Do(
+                () => TimeSpan.Zero,
+                () => new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
                     .With(new YadFolderInfoPostModel(path.Path) { WithParent = true, Amount = firstReadLimit }, out folderInfo)
                     .With(new YadResourceStatsPostModel(path.Path), out resourceStats)
                     .With(new YadActiveOperationsPostModel(), out activeOps)
@@ -161,30 +188,26 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryTimeout);
 
 
-            if (itemInfo?.Error != null ||
-                (itemInfo?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404" ||
-                resourceStats?.Error != null ||
-                (resourceStats?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404" ||
-                folderInfo?.Error != null ||
-                (folderInfo?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404")
-            {
-                throw new IOException(string.Concat("Error reading file or directory information from server ",
-                    itemInfo?.Error?.Message,
-                    " ",
-                    itemInfo?.Data?.Error?.Message,
-                    " ",
-                    resourceStats?.Error?.Message,
-                    " ",
-                    resourceStats?.Data?.Error?.Message));
-            }
+            if (folderInfo is null)
+                throw new IOException("Error reading directory information from server");
+            if (folderInfo.Error is not null)
+                throw new IOException($"Error reading directory information from server {folderInfo.Error.Message}");
+            if (folderInfo.Data is null)
+                throw new IOException($"Error reading directory information from server");
+            if ((folderInfo?.Data?.ErrorToken ?? "HTTP_404") != "HTTP_404")
+                throw new IOException($"Error reading directory information from server {folderInfo.Data.ErrorToken}");
 
-            var entryData = itemInfo?.Data;
-            if (entryData?.Type is null)
-                return null;
-            if (entryData.Type == "file")
-                return entryData.ToFile(PublicBaseUrlDefault);
+            if (resourceStats is null)
+                throw new IOException("Error reading directory information from server");
+            if (resourceStats.Error is not null)
+                throw new IOException($"Error reading directory information from server {resourceStats.Error.Message}");
+            if (resourceStats.Data is null)
+                throw new IOException($"Error reading directory information from server");
+            if ((resourceStats?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404")
+                throw new IOException($"Error reading directory information from server {resourceStats.Data.Error.Title}");
 
-            Folder folder = folderInfo.Data.ToFolder(entryData, resourceStats.Data, path.Path, PublicBaseUrlDefault, activeOps?.Data);
+
+            Folder folder = folderInfo.Data.ToFolder(itemInfo.Data, resourceStats.Data, path.Path, PublicBaseUrlDefault, activeOps?.Data);
             folder.IsChildrenLoaded = limit == int.MaxValue;
 
             int alreadyCount = folder.Descendants.Count;
@@ -237,7 +260,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 () => TimeSpan.Zero,
                 () =>
                 {
-                    string diskPath = WebDavPath.Combine("/disk", entryData.Path);
+                    string diskPath = WebDavPath.Combine("/disk", itemInfo.Data.Path);
 
                     Parallel.For(0, info.Length, (int index) =>
                     {
@@ -252,11 +275,11 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                             .Result;
 
                         if (folderPartInfo?.Error != null ||
-                            folderPartInfo?.Data?.Error != null)
+                            folderPartInfo?.Data?.ErrorToken != null)
                             throw new IOException(string.Concat("Error reading file or directory information from server ",
                                 folderPartInfo?.Error?.Message,
                                 " ",
-                                folderPartInfo?.Data?.Error?.Message));
+                                folderPartInfo?.Data?.ErrorToken));
 
                         if (folderPartInfo?.Data is not null && folderPartInfo.Error is null)
                             info[index].Result = folderPartInfo.Data;
@@ -406,7 +429,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryTimeout);
         }
 
-        public override async Task<CheckUpInfo> DetectOutsideChanges()
+        public override Task<CheckUpInfo> DetectOutsideChanges()
         {
             YadResponseModel<List<YadActiveOperationsData>, YadActiveOperationsParams> itemInfo = null;
 
@@ -448,7 +471,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 ActiveOperations = list,
             };
 
-            return info;
+            return Task.FromResult(info);
         }
 
     }

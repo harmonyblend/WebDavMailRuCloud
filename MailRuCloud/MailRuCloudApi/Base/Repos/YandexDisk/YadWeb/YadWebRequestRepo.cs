@@ -375,12 +375,20 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             //var req = await new YadCreateFolderRequest(HttpSettings, (YadWebAuth)Authenticator, path)
             //    .MakeRequestAsync(_connectionLimiter);
 
+            /* API changed in october 2024
             await new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
                 .With(new YadCreateFolderPostModel(path),
                     out YadResponseModel<YadCreateFolderRequestData, YadCreateFolderRequestParams> itemInfo)
                 .MakeRequestAsync(_connectionLimiter);
+            */
+            await new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                .With(new YadCreateFolderPostModelV2(path), out YadCreateFolderPostModelV2 resultUnsed)
+                .MakeRequestAsync(_connectionLimiter);
+            await new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                .With(new YadResourceInfoPostModelV2(path), out YadResourceInfoPostModelV2 itemInfo)
+                .MakeRequestAsync(_connectionLimiter);
 
-            var res = itemInfo.Params.ToCreateFolderResult();
+            var res = itemInfo.ToCreateFolderResult();
             return res;
         }
 

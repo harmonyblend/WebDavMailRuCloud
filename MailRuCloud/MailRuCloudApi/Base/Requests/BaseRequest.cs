@@ -55,8 +55,15 @@ namespace YaR.Clouds.Base.Requests
             request.ContinueTimeout = _settings.CloudSettings.Wait100ContinueTimeoutSec * 1000;
             request.Timeout = _settings.CloudSettings.WaitResponseTimeoutSec * 1000;
             request.ReadWriteTimeout = _settings.CloudSettings.ReadWriteTimeoutSec * 1000;
-            request.AllowWriteStreamBuffering = false;
-            request.AllowReadStreamBuffering = true;
+            /*
+             * NET 4.8: When performing a write operation with AllowWriteStreamBuffering set to false,
+             * you must either set ContentLength to a non-negative number or set SendChunked to true.
+             */
+            //request.AllowWriteStreamBuffering = false;
+            /*
+             * NET 4.8: This operation is not supported.
+             */
+            //request.AllowReadStreamBuffering = true;
             request.SendChunked = false;
             request.ServicePoint.Expect100Continue = false;
             request.KeepAlive = true;

@@ -9,6 +9,7 @@ using YaR.Clouds.Links;
 using YaR.Clouds.Base.Requests.Types;
 using System.Linq;
 using static YaR.Clouds.Extensions.Extensions;
+using System.Collections.Immutable;
 
 namespace YaR.Clouds.Common;
 
@@ -364,14 +365,11 @@ public class EntryCache : IDisposable
         CheckUpInfo.CheckInfo previous = null;
         _lastComparedInfoLocker.LockedAction(() =>
         {
-            previous = _lastComparedInfo;
-            _lastComparedInfo = info.AccountInfo;
-            if (previous is not null && _lastComparedInfo is not null)
+            if (info.AccountInfo is not null && _lastComparedInfo is not null)
             {
-                var dst = _lastComparedInfo.JournalCounters;
-                var src = previous.JournalCounters;
-                _lastComparedInfo.JournalCounters.TakeMax(previous.JournalCounters);
+                info.AccountInfo.JournalCounters.TakeMax(_lastComparedInfo.JournalCounters);
             }
+            previous = Interlocked.Exchange(ref _lastComparedInfo, info.AccountInfo);
         });
 
         // Сравнение счетчиков
@@ -420,7 +418,9 @@ public class EntryCache : IDisposable
             if (texts.Count > 0)
             {
                 // Обнаружено внешнее изменении на Диске
-                Logger.Warn($"External activity is detected ({string.Join(", ", texts)})");
+                Logger.Warn($"External activity is detected ({string.Join(", ", texts)}). " +
+                    $"If you want to keep cache you have to use the same password for your account in all your programs, " +
+                    $"so please check it.");
                 // Если между проверками что-то изменились, делаем полный сброс кеша
                 Clear();
                 return;
