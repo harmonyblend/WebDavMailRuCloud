@@ -23,7 +23,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
     }
 
 
-    internal class YadOperationStatusData : YadModelDataBase
+    public class YadOperationStatusData : YadModelDataBase
     {
         [JsonProperty("status")]
         public string Status { get; set; }

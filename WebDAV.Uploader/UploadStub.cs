@@ -63,15 +63,13 @@ namespace YaR.CloudMailRu.Client.Console
                             source.Seek(0, SeekOrigin.Begin);
                             var buffer = new byte[64000];
                             long wrote = 0;
-                            using (var target = cloud.GetFileUploadStream(WebDavPath.Combine(targetfile, fileInfo.Name), fileInfo.Length, null, null).Result)
+                            using var target = cloud.GetFileUploadStream(WebDavPath.Combine(targetfile, fileInfo.Name), fileInfo.Length, null, null).Result;
+                            int read;
+                            while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
                             {
-                                int read;
-                                while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
-                                {
-                                    target.Write(buffer, 0, read);
-                                    wrote += read;
-                                    System.Console.Write($"\r{wrote / fileInfo.Length * 100}%");
-                                }
+                                target.Write(buffer, 0, read);
+                                wrote += read;
+                                System.Console.Write($"\r{wrote / fileInfo.Length * 100}%");
                             }
                         }
 

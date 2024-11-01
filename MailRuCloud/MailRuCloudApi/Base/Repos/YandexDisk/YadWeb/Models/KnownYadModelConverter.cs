@@ -8,6 +8,8 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
 {
     class KnownYadModelConverter : JsonConverter<List<YadResponseModel>>
     {
+        private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(KnownYadModelConverter));
+
         private readonly List<object> _createdModels;
 
         public KnownYadModelConverter(List<object> createdModels)
@@ -25,7 +27,14 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
             {
                 var chToken = children[i];
                 var resItem = _createdModels[i];
-                serializer.Populate(chToken.CreateReader(), resItem);
+                try
+                {
+                    serializer.Populate(chToken.CreateReader(), resItem);
+                }
+                catch(Exception ex)
+                {
+                    Logger.Warn($"Error unpacking JSON: {ex.Message}");
+                }
             }
 
             return null;

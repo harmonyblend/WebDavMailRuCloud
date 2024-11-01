@@ -26,7 +26,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Models
     }
 
 
-    class YadResourceStatsRequestData : YadModelDataBase
+    class YadResourceStatsRequestData : YadModelDataBaseErrorStruct
     {
         /// <summary>
         /// Здесь количество файлов (не директорий), на всех уровнях вложенности.

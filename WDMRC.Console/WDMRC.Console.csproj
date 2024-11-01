@@ -4,7 +4,7 @@
 
   <PropertyGroup>
     <NoWarn>$(NoWarn);NU1605</NoWarn>
-    
+
     <OutputType>Exe</OutputType>
     <TargetFrameworks>$(CommonTargetFrameworks)</TargetFrameworks>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
@@ -13,7 +13,7 @@
     <Authors>YaR</Authors>
     <Company />
     <Product>WebDAVCloudMailRu</Product>
-    <Copyright>MIT License, Copyright (c) 2023 YaR229 and Contributors</Copyright>
+    <Copyright>MIT License, Copyright (c) 2024 YaR229 and Contributors</Copyright>
     <Description>WebDAV emulator for RU-clouds: Cloud.Mail.Ru &amp; Disk.Yandex.Ru</Description>
     <PackageId>WebDAVCloudMailRu</PackageId>
     <AssemblyVersion>$(ReleaseVersion)</AssemblyVersion>
@@ -42,7 +42,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="HttpToSocks5Proxy" Version="1.4.0" /> 
+    <PackageReference Include="HttpToSocks5Proxy" Version="1.4.0" />
   </ItemGroup>
 
   <ItemGroup>

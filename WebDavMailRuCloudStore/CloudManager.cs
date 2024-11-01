@@ -41,7 +41,8 @@ public static class CloudManager
     public static Cloud Instance(IIdentity identity)
     {
         var basicIdentity = (HttpListenerBasicIdentity)identity;
-        string key = basicIdentity.Name + basicIdentity.Password;
+        // Ключ не должен зависеть от специальных сиволов, указывающих на способ аутентификации
+        string key = basicIdentity.Name.TrimStart(['?', '!']) + basicIdentity.Password;
 
         _dictionaryLocker.Wait();
         try

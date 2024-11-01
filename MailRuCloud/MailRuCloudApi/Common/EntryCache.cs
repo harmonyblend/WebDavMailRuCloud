@@ -8,6 +8,8 @@ using YaR.Clouds.Base;
 using YaR.Clouds.Links;
 using YaR.Clouds.Base.Requests.Types;
 using System.Linq;
+using static YaR.Clouds.Extensions.Extensions;
+using System.Collections.Immutable;
 
 namespace YaR.Clouds.Common;
 
@@ -52,17 +54,25 @@ public class EntryCache : IDisposable
     private readonly ConcurrentDictionary<string /* full path */, CacheItem> _root =
         new(StringComparer.InvariantCultureIgnoreCase);
 
-    private readonly SemaphoreSlim _locker = new SemaphoreSlim(1);
+    private readonly SemaphoreSlim _rootLocker = new SemaphoreSlim(1);
 
     public delegate Task<CheckUpInfo> CheckOperations();
     private readonly CheckOperations _activeOperationsAsync;
     private readonly System.Timers.Timer _checkActiveOperationsTimer;
-    // Проверка активных операций на сервере и внешних изменений в облаке не через сервис
-    // производится каждые 24 секунды, число не кратное очистке кеша, чтобы не пересекались
-    // алгоритмы.
-    private readonly TimeSpan _opCheckPeriod = TimeSpan.FromSeconds(24);
+    // Проверка активных операций на сервере и наличия внешних изменений в облаке мимо сервиса
+    private readonly TimeSpan _opCheckPeriod = TimeSpan.FromSeconds(15);
+    /// <summary>
+    /// Сохраняемая с сервера и пополняемая при операциях данного сервиса информация о состоянии Диска,
+    /// для выявление внешних операций на Диске, минуя данный сервис, чтобы вовремя
+    /// сбросить кеш и обновить информацию с сервера.
+    /// </summary>
+    private CheckUpInfo.CheckInfo _lastComparedInfo;
+    /// <summary>
+    /// Блокировщик доступа к <see cref="_lastComparedInfo"/>
+    /// </summary>
+    private readonly SemaphoreSlim _lastComparedInfoLocker = new SemaphoreSlim(1);
 
-    private CheckUpInfo.CheckInfo? _lastComparedInfo;
+
 
     [DebuggerDisplay("{DebuggerDisplay,nq}")]
     internal class CacheItem
@@ -98,6 +108,25 @@ public class EntryCache : IDisposable
             + $", Since {CreationTime:HH:mm:ss} {Entry?.FullPath}";
     }
 
+    /// <summary>
+    /// Перед выполнение любой операции сюда в мешок помещается путь к файлу или папке.
+    /// После окончания выполнения операции, пусть файла или папки удаляется отсюда из мешка.
+    /// По наличию пути в этом мешке в методе CheckActiveOps проверяется чья операция
+    /// происходит на сервере - данного сервиса или сторонняя, и если стороннего,
+    /// то кеш сбрасывается.
+    /// </summary>
+    private readonly Dictionary<string /* full path */, CounterClass> _registeredOperationPath =
+        new(StringComparer.InvariantCultureIgnoreCase);
+    /// <summary>
+    /// Блокировщик доступа к <see cref="_registeredOperationPath"/>>
+    /// </summary>
+    private readonly SemaphoreSlim _operationLocker = new SemaphoreSlim(1);
+
+    internal class /* это должен быть class, не struct */ CounterClass
+    {
+        public int Value;
+    }
+
     public EntryCache(TimeSpan expirePeriod, CheckOperations activeOperationsAsync)
     {
         _expirePeriod = expirePeriod;
@@ -128,7 +157,10 @@ public class EntryCache : IDisposable
                     Enabled = true,
                     AutoReset = true
                 };
-                _checkActiveOperationsTimer.Elapsed += CheckActiveOps;
+                _checkActiveOperationsTimer.Elapsed += CheckActiveOpsAsync;
+
+                // Для инициализации коллекции счетчиков, обращение к серверу за актуальными значениями
+                CheckActiveOpsAsync();
             }
         }
     }
@@ -153,8 +185,9 @@ public class EntryCache : IDisposable
                 _cleanTimer?.Stop();
                 _cleanTimer?.Dispose();
             }
-            Clear();
-            _locker?.Dispose();
+            ClearNoLock();
+            _rootLocker?.Dispose();
+            _operationLocker?.Dispose();
 
             Logger.Debug("EntryCache is disposed");
         }
@@ -200,8 +233,7 @@ public class EntryCache : IDisposable
         int partiallyExpiredCount = 0;
         foreach (var entry in _root)
         {
-            _locker.Wait();
-            try
+            _rootLocker.LockedAction(() =>
             {
                 if (entry.Value.CreationTime <= threshold &&
                     _root.TryRemove(entry.Key, out var cacheEntry))
@@ -225,66 +257,252 @@ public class EntryCache : IDisposable
                         }
                     }
                 }
-            }
-            finally
-            {
-                _locker.Release();
-            }
+            });
         }
 
         if (removedCount > 0)
             Logger.Debug($"Items cache clean: removed {removedCount} expired " +
                 $"items, {partiallyExpiredCount} marked partially expired ({watch.ElapsedMilliseconds} ms)");
-
-        return;
     }
 
-    public void ResetCheck()
+    public void RegisterOperation(string path, CounterOperation operation)
     {
         if (!IsCacheEnabled)
             return;
 
-        _locker.Wait();
-        try
+        // Регистрация пути файла или папки, над которым производится манипуляция
+        _operationLocker.LockedAction(() =>
         {
-            _lastComparedInfo = null;
-        }
-        finally
+            if (_registeredOperationPath.TryGetValue(path, out var counter))
+            {
+                counter.Value++;
+            }
+            else
+            {
+                counter = new();
+                counter.Value = 1;
+                _registeredOperationPath.Add(path, counter);
+            }
+        });
+
+        // Увеличение счетчика, соответствующего операции
+        if (operation != CounterOperation.None && IsCacheEnabled && !_root.IsEmpty)
         {
-            _locker.Release();
+            _lastComparedInfoLocker.LockedAction(() => _lastComparedInfo?.JournalCounters.Increment(operation));
         }
     }
 
-    private async void CheckActiveOps(object sender, System.Timers.ElapsedEventArgs e)
+    public void UnregisterOperation(string path)
     {
-        CheckUpInfo info = await _activeOperationsAsync();
-        if (info is null || _disposedValue)
+        if (!IsCacheEnabled)
             return;
 
-        CheckUpInfo.CheckInfo? currentValue;
-
-        _locker.Wait();
-        try
+        _operationLocker.LockedAction(() =>
         {
-            currentValue = _lastComparedInfo;
-            _lastComparedInfo = info.AccountInfo;
-        }
-        finally
-        {
-            _locker.Release();
-        }
-
-        if (currentValue is not null)
-        {
-            if (info.AccountInfo.FilesCount != currentValue.Value.FilesCount ||
-                info.AccountInfo.Trash != currentValue.Value.Trash ||
-                info.AccountInfo.Free != currentValue.Value.Free)
+            if (_registeredOperationPath.TryGetValue(path, out var counter) &&
+                --counter.Value <= 0)
             {
+                _registeredOperationPath.Remove(path);
+            }
+        });
+    }
+
+    private void CheckActiveOpsAsync(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        CheckActiveOpsAsync();
+    }
+
+    private DateTime _lastCheck = DateTime.MinValue;
+
+    private async void CheckActiveOpsAsync()
+    {
+        if (_disposedValue || !IsCacheEnabled || _activeOperationsAsync is null)
+            return;
+
+        if (_root.IsEmpty)
+        {
+            /*
+             * Когда кеш пустой, периодически все равно делаем сравнение счетчиков сохраненных
+             * и увеличенных на количество операций, сделанных, данным сервисом,
+             * со значениями с сервера для выявления ситуации, когда на сервере значение меньше,
+             * то есть не "догнало" увеличение сохраненного счетчика.
+             */
+            if (DateTime.Now.Subtract(_lastCheck).Minutes < 2)
+                return;
+        }
+        _lastCheck = DateTime.Now;
+
+        CheckUpInfo info = await _activeOperationsAsync();
+        if (info is null)
+            return;
+
+        /*
+         * Если на Диске производятся операции, которые идут мимо текущего сервиса,
+         * с большой вероятностью, кеш будет неактуальным.
+         * Наличие внешних операций отслеживается двумя методами:
+         *   - сравнение счетчиков - если количество операций на Диске
+         *          с учетом операций данного сервиса изменилось,
+         *          значит кто-то что-то делает параллельно,
+         *          минуя текущий сервис, тогда делается сброс всего кеша;
+         *   - проверка активных операций на Диске (например длительно перемещение
+         *          папки из одного места в другое),
+         *          если такие длительные операции не изменяют счетчики,
+         *          то их не отследить иначе, при обнаружении длительной операции
+         *          делается сброс кеша с путем, затронутым операцией
+         *          (если не менялись счетчики, если менялись - полный сброс кеша).
+         *
+         * Полученные и сохраненные счетчики увеличиваются данным сервисом при операциях с Диском.
+         * Т.к. на сервере обновление счетчиков требует 10-20 секунд, может получиться ситуация,
+         * когда от сервера пришли значения меньшие, чем сохранные (из-за увеличения при операциях данным сервисом).
+         * Но через какое-то время значения от сервера должны "догнать" сохраненные значения,
+         * то есть стать равными им. Если при отсутствии операций с Диском через данный сервис, значения с сервера
+         * так и не догнали сохраненные значения, значит алгоритм что-то не учитывает.
+         * Если значения с сервера обогнали сохраненные значения, значит на сервере что-то было сделано,
+         * в обход данного сервиса, в таком случае делается сброс кеша.
+         * Из-за необходимости "догонять" значения, сохраняются значения от сервера не напрямую,
+         * а берется максимум из пришедших и сохраненных значений.
+         */
+        CheckUpInfo.CheckInfo previous = null;
+        _lastComparedInfoLocker.LockedAction(() =>
+        {
+            if (info.AccountInfo is not null && _lastComparedInfo is not null)
+            {
+                info.AccountInfo.JournalCounters.TakeMax(_lastComparedInfo.JournalCounters);
+            }
+            previous = Interlocked.Exchange(ref _lastComparedInfo, info.AccountInfo);
+        });
+
+        // Сравнение счетчиков
+        if (previous is not null)
+        {
+            List<string> texts = [];
+            var a = previous.JournalCounters;
+            var b = info.AccountInfo.JournalCounters;
+
+            if (a.RemoveCounter < b.RemoveCounter)
+                texts.Add($"{JournalCounters.RemoveCounterStr}: {a.RemoveCounter}->{b.RemoveCounter}");
+
+            if (a.RenameCounter < b.RenameCounter)
+                texts.Add($"{JournalCounters.RenameCounterStr}: {a.RenameCounter}->{b.RenameCounter}");
+
+            if (a.MoveCounter < b.MoveCounter)
+                texts.Add($"{JournalCounters.MoveCounterStr}: {a.MoveCounter}->{b.MoveCounter}");
+
+            if (a.CopyCounter < b.CopyCounter)
+                texts.Add($"{JournalCounters.CopyCounterStr}: {a.CopyCounter}->{b.CopyCounter}");
+
+            //if (a.UpdateCounter < b.UpdateCounter)
+            //    texts.Add($"{JournalCounters.UpdateCounterStr}: {a.UpdateCounter}->{b.UpdateCounter}");
+
+            if (a.UploadCounter < b.UploadCounter)
+                texts.Add($"{JournalCounters.UploadCounterStr}: {a.UploadCounter}->{b.UploadCounter}");
+
+            if (a.TakeSomeonesFolderCounter < b.TakeSomeonesFolderCounter)
+                texts.Add($"{JournalCounters.TakeSomeonesFolderCounterStr}: {a.TakeSomeonesFolderCounter}->{b.TakeSomeonesFolderCounter}");
+
+            if (a.NewFolderCounter < b.NewFolderCounter)
+                texts.Add($"{JournalCounters.NewFolderCounterStr}: {a.NewFolderCounter}->{b.NewFolderCounter}");
+
+            if (a.RemoveToTrashCounter < b.RemoveToTrashCounter)
+                texts.Add($"{JournalCounters.RemoveToTrashCounterStr}: {a.RemoveToTrashCounter}->{b.RemoveToTrashCounter}");
+
+            if (a.RestoreFromTrashCounter < b.RestoreFromTrashCounter)
+                texts.Add($"{JournalCounters.RestoreFromTrashCounterStr}: {a.RestoreFromTrashCounter}->{b.RestoreFromTrashCounter}");
+
+            if (a.TrashDropItemCounter < b.TrashDropItemCounter)
+                texts.Add($"{JournalCounters.TrashDropItemCounterStr}: {a.TrashDropItemCounter}->{b.TrashDropItemCounter}");
+
+            if (a.TrashDropAllCounter < b.TrashDropAllCounter)
+                texts.Add($"{JournalCounters.TrashDropAllCounterStr}: {a.TrashDropAllCounter}->{b.TrashDropAllCounter}");
+
+            if (texts.Count > 0)
+            {
+                // Обнаружено внешнее изменении на Диске
+                Logger.Warn($"External activity is detected ({string.Join(", ", texts)}). " +
+                    $"If you want to keep cache you have to use the same password for your account in all your programs, " +
+                    $"so please check it.");
                 // Если между проверками что-то изменились, делаем полный сброс кеша
                 Clear();
                 return;
             }
+
+            if (_root.IsEmpty)
+            {
+                // Реализуем механизм защиты, на случай, если счетчики серверные так и не догнали увеличение счетчиков локальных
+                texts.Clear();
+
+                if (a.RemoveCounter > b.RemoveCounter)
+                    texts.Add($"{JournalCounters.RemoveCounterStr}: {a.RemoveCounter}->{b.RemoveCounter}");
+
+                if (a.RenameCounter > b.RenameCounter)
+                    texts.Add($"{JournalCounters.RenameCounterStr}: {a.RenameCounter}->{b.RenameCounter}");
+
+                if (a.MoveCounter > b.MoveCounter)
+                    texts.Add($"{JournalCounters.MoveCounterStr}: {a.MoveCounter}->{b.MoveCounter}");
+
+                if (a.CopyCounter > b.CopyCounter)
+                    texts.Add($"{JournalCounters.CopyCounterStr}: {a.CopyCounter}->{b.CopyCounter}");
+
+                if (a.UploadCounter > b.UploadCounter)
+                    texts.Add($"{JournalCounters.UploadCounterStr}: {a.UploadCounter}->{b.UploadCounter}");
+
+                if (a.TakeSomeonesFolderCounter > b.TakeSomeonesFolderCounter)
+                    texts.Add($"{JournalCounters.TakeSomeonesFolderCounterStr}: {a.TakeSomeonesFolderCounter}->{b.TakeSomeonesFolderCounter}");
+
+                if (a.NewFolderCounter > b.NewFolderCounter)
+                    texts.Add($"{JournalCounters.NewFolderCounterStr}: {a.NewFolderCounter}->{b.NewFolderCounter}");
+
+                //if (a.UpdateCounter > b.UpdateCounter)
+                //    texts.Add($"{JournalCounters.UpdateCounterStr}: {a.UpdateCounter}->{b.UpdateCounter}");
+
+                if (a.RemoveToTrashCounter > b.RemoveToTrashCounter)
+                    texts.Add($"{JournalCounters.RemoveToTrashCounterStr}: {a.RemoveToTrashCounter}->{b.RemoveToTrashCounter}");
+
+                if (a.RestoreFromTrashCounter > b.RestoreFromTrashCounter)
+                    texts.Add($"{JournalCounters.RestoreFromTrashCounterStr}: {a.RestoreFromTrashCounter}->{b.RestoreFromTrashCounter}");
+
+                if (a.TrashDropItemCounter > b.TrashDropItemCounter)
+                    texts.Add($"{JournalCounters.TrashDropItemCounterStr}: {a.TrashDropItemCounter}->{b.TrashDropItemCounter}");
+
+                if (a.TrashDropAllCounter > b.TrashDropAllCounter)
+                    texts.Add($"{JournalCounters.TrashDropAllCounterStr}: {a.TrashDropAllCounter}->{b.TrashDropAllCounter}");
+
+                if (texts.Count > 0)
+                {
+                    // Обнаружено внешнее изменении на Диске
+                    Logger.Error($"There is a problem in external activity detection algorithm ({string.Join(", ", texts)})");
+                }
+
+                _lastComparedInfoLocker.LockedAction(() =>
+                {
+                    // Локальные счетчики выравниваются по серверным, без увеличения на количество операций данного сервиса
+                    _lastComparedInfo = info.AccountInfo;
+
+                    // Выравнивание счетчиков сделано, повторно делать не нужно
+                    _lastCheck = DateTime.MaxValue;
+                });
+            }
+
+            //if (info.AccountInfo.FilesCount != previous.Value.FilesCount ||
+            //    info.AccountInfo.Trash != previous.Value.Trash ||
+            //    info.AccountInfo.Free != previous.Value.Free)
+            //{
+            //    // Если между проверками что-то изменились, делаем полный сброс кеша
+            //    Clear();
+            //    return;
+            //}
         }
+
+        bool isEmpty;
+        List<string> ownOperation = [];
+        _operationLocker.LockedAction(() =>
+        {
+            isEmpty = _registeredOperationPath.Count == 0;
+            foreach (var item in _registeredOperationPath)
+            {
+                ownOperation.Add(item.Key);
+            }
+        });
 
         List<string> paths = [];
         foreach (var op in info.ActiveOperations)
@@ -309,21 +527,36 @@ public class EntryCache : IDisposable
         if (paths.Count == 0)
             return;
 
-        await _locker.WaitAsync();
-        try
+        _rootLocker.LockedActionAsync(() =>
         {
             foreach (var cacheItem in _root)
             {
-                if (paths.Any(x => WebDavPath.IsParent(x, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false)))
+                foreach (var operationPath in paths)
                 {
-                    _root.TryRemove(cacheItem.Key, out _);
+                    /*
+                     * Проверяется условие, что entry из кеша
+                     * находится в поддереве пути операции, полученной от сервера,
+                     * при этом исключаются каждое поддерево зарегистрированной собственной операций сервиса.
+                     */
+                    if (WebDavPath.IsParent(operationPath, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false) &&
+                        !ownOperation.Any(x => WebDavPath.IsParent(x, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false)))
+                    {
+                        _root.TryRemove(cacheItem.Key, out _);
+
+                        /*
+                         * После удаления из кеша элемента, затронутого операцией на сервере,
+                         * которая не является собственной операцией сервиса,
+                         * У папки элемента (родительский путь элемента) надо поставить признак,
+                         * что загружены не все элементы.
+                         */
+                        if (_root.TryGetValue(WebDavPath.Parent(cacheItem.Key), out var parentEntry) &&
+                            parentEntry.Entry is Folder fld &&
+                            parentEntry.AllDescendantsInCache)
+                            parentEntry.AllDescendantsInCache = false;
+                    }
                 }
             }
-        }
-        finally
-        {
-            _locker.Release();
-        }
+        });
     }
 
     public (IEntry, GetState) Get(string fullPath)
@@ -333,7 +566,7 @@ public class EntryCache : IDisposable
 
         IEntry result = default;
 
-        _locker.Wait();
+        _rootLocker.Wait();
         try
         {
             if (!_root.TryGetValue(fullPath, out var cachedEntry))
@@ -408,7 +641,7 @@ public class EntryCache : IDisposable
         }
         finally
         {
-            _locker.Release();
+            _rootLocker.Release();
         }
 
         Logger.Debug($"Cache hit: {fullPath}");
@@ -438,15 +671,7 @@ public class EntryCache : IDisposable
         {
             if (folder.IsChildrenLoaded)
             {
-                _locker.Wait();
-                try
-                {
-                    AddWithChildren(folder, DateTime.Now);
-                }
-                finally
-                {
-                    _locker.Release();
-                }
+                _rootLocker.LockedAction(() => AddWithChildren(folder, DateTime.Now));
             }
             else
             {
@@ -557,55 +782,35 @@ public class EntryCache : IDisposable
         }
     }
 
-    public async void OnCreateAsync(string fullPath, Task<IEntry> newEntryTask)
+    public void OnCreate(DateTime operationStartTimestamp,
+        string createdItemFullPath, Task<IEntry> createdEntryTask, string ignoreItemFullPath)
     {
         if (!IsCacheEnabled)
             return;
 
-        IEntry newEntry = newEntryTask is null
-            ? null
-            : await newEntryTask;
+        IEntry createdEntry = createdEntryTask?.Result;
 
-        if (newEntry is null)
+        if (createdEntry is null)
         {
-            await _locker.WaitAsync();
-            try
-            {
-                if (_root.TryRemove(fullPath, out var cachedItem))
-                {
-                    // Нового нет, но был, удалить из кеша
-                    if (fullPath != WebDavPath.Root)
-                    {
-                        if (_root.TryGetValue(WebDavPath.Parent(fullPath), out var parentEntry) &&
-                            parentEntry.Entry is Folder)
-                        {
-                            parentEntry.AllDescendantsInCache = false;
-                        }
-                    }
-                }
-                else
-                {
-                    // Нового нет, и не было
-                    return;
-                }
-            }
-            finally
-            {
-                _locker.Release();
-            }
+            // Если операция должна была создать элемент, но он не получен с сервера,
+            // это не нормальная ситуация.
+            // Сбрасываем весь кеш, чтобы все перечитать заново на всякий случай.
+            Clear();
+            return;
         }
         else
         {
-            await _locker.WaitAsync();
-            try
+            _rootLocker.LockedActionAsync(() =>
             {
-                bool removed = _root.TryRemove(fullPath, out var cachedItem);
+                //string itemToCheckUnder = createdItemFullPath;
+
+                bool removed = _root.TryRemove(createdItemFullPath, out var cachedItem);
 
                 // Добавить новый
-                if (newEntry is File file)
+                if (createdEntry is File file)
                     AddInternal(file, DateTime.Now);
                 else
-                if (newEntry is Folder folder)
+                if (createdEntry is Folder folder)
                 {
                     /* Данный метод вызывается для созданных и переименованных файлов и папок.
                      * С сервера читали entry самой папки и одного вложенного элемента.
@@ -623,12 +828,13 @@ public class EntryCache : IDisposable
                 }
                 // После добавления или обновления элемента надо обновить родителя,
                 // если у него AllDescendantsInCache=true, иначе нет смысла
-                string parent = WebDavPath.Parent(fullPath);
-                if (fullPath != WebDavPath.Root &&
+                string parent = WebDavPath.Parent(createdItemFullPath);
+                if (createdItemFullPath != WebDavPath.Root &&
                     _root.TryGetValue(parent, out var parentEntry) &&
-                        parentEntry.Entry is Folder fld &&
-                        parentEntry.AllDescendantsInCache)
+                    parentEntry.Entry is Folder fld &&
+                    parentEntry.AllDescendantsInCache)
                 {
+                    //itemToCheckUnder = fld.FullPath;
                     /*
                      * Внимание! У добавляемого в кеш folder список Descendants всегда пустой!
                      * Он специально очищается, чтобы не было соблазна им пользоваться!
@@ -648,7 +854,7 @@ public class EntryCache : IDisposable
                                 fld.ServerFoldersCount--;
                         }
                     }
-                    if (newEntry.IsFile)
+                    if (createdEntry.IsFile)
                     {
                         if (fld.ServerFilesCount.HasValue)
                             fld.ServerFilesCount++;
@@ -659,61 +865,75 @@ public class EntryCache : IDisposable
                             fld.ServerFoldersCount++;
                     }
                 }
-            }
-            finally
-            {
-                _locker.Release();
-            }
+
+                //if (operationStartTimestamp != DateTime.MaxValue)
+                //{
+                //    foreach (var cacheItem in _root)
+                //    {
+                //        if (!WebDavPath.IsParent(createdItemFullPath, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false) &&
+                //            (string.IsNullOrEmpty(ignoreItemFullPath)
+                //            || !WebDavPath.IsParent(ignoreItemFullPath, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false)) &&
+                //            WebDavPath.IsParent(itemToCheckUnder, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false))
+                //        {
+                //            if (cacheItem.Value.CreationTime > operationStartTimestamp)
+                //            {
+                //                /*
+                //                 * Если после начала операции,
+                //                 * в дереве элементов ниже родителя созданного элемента
+                //                 * появился новый элемент, это означает,
+                //                 * что были какие-то параллельные операции.
+                //                 * В таком случае на всякий случай лучше сделать полный сброс кеша.
+                //                 */
+                //                ClearNoLock();
+                //                return;
+                //            }
+                //        }
+                //    }
+                //}
+            });
         }
     }
 
-    public async void OnRemoveTreeAsync(string fullPath, Task<IEntry> newEntryTask)
+    public void OnRemoveTree(DateTime operationStartTimestamp, string removedItemFullPath, Task<IEntry> removedEntryTask)
     {
         if (!IsCacheEnabled)
             return;
 
-        IEntry newEntry = newEntryTask is null
-            ? null
-            : await newEntryTask;
+        IEntry removedEntry = removedEntryTask?.Result;
 
-        if (newEntry is not null)
+        if (removedEntry is not null)
         {
             // Если операция удалила элемент, но он снова получен с сервера,
             // это не нормальная ситуация.
             // Сбрасываем весь кеш, чтобы все перечитать заново на всякий случай.
-            await _locker.WaitAsync();
-            try
-            {
-                _root.Clear();
-            }
-            finally
-            {
-                _locker.Release();
-            }
+            Logger.Error("Cache algorithm failed. Cache is purged.");
+            Clear();
             return;
         }
         else
         {
             // Нового элемента на сервере нет,
             // очищаем кеш от элемента и всего, что под ним
-            await _locker.WaitAsync();
-            try
+            _rootLocker.LockedActionAsync(() =>
             {
+                //string itemToCheckUnder = removedItemFullPath;
+
                 // Если элемент был, а нового нет, надо удалить его у родителя,
                 // чтобы не перечитывать родителя целиком с сервера,
                 // но только, если у родителя AllDescendantsInCache=true, иначе нет смысла
-                if (fullPath != WebDavPath.Root &&
-                    _root.TryGetValue(WebDavPath.Parent(fullPath), out var parentEntry) &&
-                        parentEntry.Entry is Folder fld &&
-                        parentEntry.AllDescendantsInCache)
+                if (removedItemFullPath != WebDavPath.Root &&
+                    _root.TryGetValue(WebDavPath.Parent(removedItemFullPath), out var parentEntry) &&
+                    parentEntry.Entry is Folder fld &&
+                    parentEntry.AllDescendantsInCache)
                 {
+                    //itemToCheckUnder = fld.FullPath;
                     /*
                      * Внимание! У добавляемого в кеш folder список Descendants всегда пустой!
                      * Он специально очищается, чтобы не было соблазна им пользоваться!
                      * Содержимое папки берется не из этого списка, а собирается из кеша по path всех entry.
                      * В кеше у папок Descendants всегда = ImmutableList<IEntry>.Empty
                      */
-                    if (_root.TryRemove(fullPath, out var cachedItem))
+                    if (_root.TryRemove(removedItemFullPath, out var cachedItem))
                     {
                         if (cachedItem.Entry.IsFile)
                         {
@@ -730,7 +950,24 @@ public class EntryCache : IDisposable
 
                 foreach (var cacheItem in _root)
                 {
-                    if (WebDavPath.IsParent(fullPath, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false))
+                    //if (operationStartTimestamp != DateTime.MaxValue &&
+                    //    WebDavPath.IsParent(itemToCheckUnder, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false))
+                    //{
+                    //    if (cacheItem.Value.CreationTime > operationStartTimestamp)
+                    //    {
+                    //        /*
+                    //         * Если после начала операции,
+                    //         * в дереве элементов ниже родителя удаленного элемента
+                    //         * появился новый элемент, это означает,
+                    //         * что были какие-то параллельные операции.
+                    //         * В таком случае на всякий случай лучше сделать полный сброс кеша.
+                    //         */
+                    //        ClearNoLock();
+                    //        return;
+                    //    }
+                    //}
+
+                    if (WebDavPath.IsParent(removedItemFullPath, cacheItem.Key, selfTrue: true, oneLevelDistanceOnly: false))
                     {
                         cacheItem.Value.CreationTime = DateTime.MinValue;
                     }
@@ -744,12 +981,8 @@ public class EntryCache : IDisposable
                     AllDescendantsInCache = true,
                     CreationTime = DateTime.Now
                 };
-                _root.TryAdd(fullPath, deletedItem);
-            }
-            finally
-            {
-                _locker.Release();
-            }
+                _root.TryAdd(removedItemFullPath, deletedItem);
+            });
         }
     }
 
@@ -758,8 +991,7 @@ public class EntryCache : IDisposable
         if (!IsCacheEnabled)
             return;
 
-        _locker.Wait();
-        try
+        _rootLocker.LockedAction(() =>
         {
             _root.TryRemove(fullPath, out _);
 
@@ -768,11 +1000,7 @@ public class EntryCache : IDisposable
             {
                 parentEntry.AllDescendantsInCache = false;
             }
-        }
-        finally
-        {
-            _locker.Release();
-        }
+        });
     }
 
     public void RemoveTree(string fullPath)
@@ -780,15 +1008,7 @@ public class EntryCache : IDisposable
         if (!IsCacheEnabled)
             return;
 
-        _locker.Wait();
-        try
-        {
-            RemoveTreeNoLock(fullPath);
-        }
-        finally
-        {
-            _locker.Release();
-        }
+        _rootLocker.LockedAction(() => RemoveTreeNoLock(fullPath));
     }
 
     private void RemoveTreeNoLock(string fullPath)
@@ -814,14 +1034,12 @@ public class EntryCache : IDisposable
         if (!IsCacheEnabled)
             return;
 
-        _locker.Wait();
-        try
-        {
-            _root.Clear();
-        }
-        finally
-        {
-            _locker.Release();
-        }
+        _rootLocker.LockedAction(() => ClearNoLock());
+    }
+
+    public void ClearNoLock()
+    {
+        _root.Clear();
+        Logger.Debug($"Cache is cleared");
     }
 }
