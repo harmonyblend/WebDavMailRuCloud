@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
@@ -15,7 +16,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
         private readonly YadPostData _postData = new();
 
-        private readonly List<object> _outData = new();
+        private readonly List<object> _outData = [];
 
         private YadWebAuth YadAuth { get; }
 
@@ -39,20 +40,23 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
             return _postData.CreateHttpContent();
         }
 
-        public YaDCommonRequest With<T, TOut>(T model, out TOut resOUt)
+        public YaDCommonRequest With<T, TOut>(T model, out TOut resOut)
             where T : YadPostModel
             where TOut : YadResponseModel, new()
         {
             _postData.Models.Add(model);
-            _outData.Add(resOUt = new TOut());
+            _outData.Add(resOut = new TOut());
 
             return this;
         }
 
         protected override string RelationalUri
-            => string.Concat("/models/?_m=", _postData.Models
-                                                      .Select(m => m.Name)
-                                                      .Aggregate((current, next) => current + "," + next));
+            => string.Concat(
+                "/models/?_m=",
+                _postData
+                    .Models
+                    .Select(m => m.Name)
+                    .Aggregate((current, next) => current + "," + next));
 
         protected override RequestResponse<YadResponseResult> DeserializeMessage(
             NameValueCollection responseHeaders, System.IO.Stream stream)
@@ -65,8 +69,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
             var msg = new RequestResponse<YadResponseResult>
             {
                 Ok = true,
-                Result = JsonConvert.DeserializeObject<YadResponseResult>(
-                    text, new KnownYadModelConverter(_outData))
+                Result = JsonConvert.DeserializeObject<YadResponseResult>(text, new KnownYadModelConverter(_outData))
             };
 
             if (YadAuth.Credentials.AuthenticationUsingBrowser)

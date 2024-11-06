@@ -16,7 +16,7 @@
     <RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
     <Authors>YaR229 and Contributors</Authors>
     <Product>BrowserAuthenticator for WebDAV emulator</Product>
-    <Copyright>MIT License, Copyright (c) 2023 YaR229 and Contributors</Copyright>
+    <Copyright>MIT License, Copyright (c) 2024 YaR229 and Contributors</Copyright>
     <PackageIcon>cloud.ico</PackageIcon>
     <RepositoryUrl>https://github.com/ZZZConsulting/WebDavMailRuCloud</RepositoryUrl>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
@@ -30,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2151.40" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2849.39" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 

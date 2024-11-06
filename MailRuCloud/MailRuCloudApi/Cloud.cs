@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -317,12 +316,10 @@ namespace YaR.Clouds
             //    //_itemCache.Add(cachefolder.Files);
             //}
             remotePath = ulink is null ? RemotePath.Get(path) : RemotePath.Get(ulink);
+            DateTime timestamp = DateTime.Now;
             var cloudResult = await RequestRepo.FolderInfo(remotePath, depth: Settings.ListDepth);
             if (cloudResult is null)
             {
-                // Если обратились к серверу, а в ответ пустота,
-                // надо прочистить кеш, на случай, если в кеше что-то есть,
-                // а в облаке параллельно удалили папку.
                 // Если с сервера получено состояние, что папки нет,
                 // а кеш ранее говорил, что папка в кеше есть, но без наполнения,
                 // то папку удалили и надо безотлагательно очистить кеш.
@@ -330,7 +327,7 @@ namespace YaR.Clouds
                 {
                     Logger.Debug("Папка была удалена, делается чистка кеша");
                 }
-                _entryCache.OnRemoveTreeAsync(remotePath.Path, null);
+                _entryCache.OnRemoveTree(timestamp, remotePath.Path, null);
 
                 return null;
             }
@@ -556,14 +553,13 @@ namespace YaR.Clouds
                 await Unpublish(innerFile.GetPublicLinks(this).FirstOrDefault().Uri, innerFile.FullPath);
                 innerFile.PublicLinks.Clear();
             }
-            _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
         }
 
 
         private async Task<Uri> Publish(string fullPath)
         {
             var res = (await RequestRepo.Publish(fullPath))
-                .ThrowIf(r => !r.IsSuccess, _ => new Exception($"Publish error, path = {fullPath}"));
+            .ThrowIf(r => !r.IsSuccess, _ => new Exception($"Publish error, path = {fullPath}"));
 
             var uri = new Uri(res.Url, UriKind.RelativeOrAbsolute);
             if (!uri.IsAbsoluteUri)
@@ -653,6 +649,7 @@ namespace YaR.Clouds
         /// <returns>True or false operation result.</returns>
         public async Task<bool> Copy(Folder folder, string destinationPath)
         {
+            DateTime timestampBeforeOperation = DateTime.Now;
             destinationPath = WebDavPath.Clean(destinationPath);
 
             // if it linked - just clone
@@ -669,14 +666,27 @@ namespace YaR.Clouds
                 }
             }
 
-            //var copyRes = await new CopyRequest(CloudApi, folder.FullPath, destinationPath).MakeRequestAsync(_connectionLimiter);
-            var copyRes = await RequestRepo.Copy(folder.FullPath, destinationPath);
-            if (!copyRes.IsSuccess)
-                return false;
+            try
+            {
+                _entryCache.RegisterOperation(folder.FullPath, CounterOperation.Copy);
+                _entryCache.RegisterOperation(destinationPath, CounterOperation.None);
 
-            _entryCache.ResetCheck();
-            _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
-            _entryCache.OnRemoveTreeAsync(folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
+                //var copyRes = await new CopyRequest(CloudApi, folder.FullPath, destinationPath).MakeRequestAsync(_connectionLimiter);
+                var copyRes = await RequestRepo.Copy(folder.FullPath, destinationPath);
+                if (!copyRes.IsSuccess)
+                    return false;
+
+                // OnRemove делать до OnCreate
+                _entryCache.OnRemoveTree(timestampBeforeOperation,
+                    folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
+                _entryCache.OnCreate(timestampBeforeOperation,
+                    destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true), folder.FullPath);
+            }
+            finally
+            {
+                _entryCache.UnregisterOperation(folder.FullPath);
+                _entryCache.UnregisterOperation(destinationPath);
+            }
 
             //clone all inner links
             if (LinkManager is not null)
@@ -746,6 +756,7 @@ namespace YaR.Clouds
         /// <returns>True or false operation result.</returns>
         public async Task<bool> Copy(File file, string destinationPath, string newName)
         {
+            DateTime timestamp = DateTime.Now;
             string destPath = destinationPath;
             newName = string.IsNullOrEmpty(newName) ? file.Name : newName;
             bool doRename = file.Name != newName;
@@ -756,7 +767,11 @@ namespace YaR.Clouds
                 // копируем не саму ссылку, а её содержимое
                 if (link is not null)
                 {
+
                     var cloneRes = await CloneItem(destPath, link.Href.OriginalString);
+                    if (!cloneRes.IsSuccess)
+                        return false;
+
                     if (doRename || WebDavPath.Name(cloneRes.Path) != newName)
                     {
                         string newFullPath = WebDavPath.Combine(destPath, WebDavPath.Name(cloneRes.Path));
@@ -765,39 +780,41 @@ namespace YaR.Clouds
                             return false;
                     }
 
-                    if (!cloneRes.IsSuccess)
-                        return false;
-
-                    _entryCache.ResetCheck();
-                    _entryCache.OnCreateAsync(destPath, GetItemAsync(destPath, fastGetFromCloud: true));
-                    _entryCache.OnRemoveTreeAsync(link.Href.OriginalString, GetItemAsync(link.Href.OriginalString, fastGetFromCloud: true));
-
                     return true;
                 }
             }
 
-            var qry = file.Files
+            var qry = file
+                    .Files
                     .AsParallel()
                     .WithDegreeOfParallelism(file.Files.Count)
                     .Select(async pfile =>
                     {
-                        //var copyRes = await new CopyRequest(CloudApi, pfile.FullPath, destPath, ConflictResolver.Rewrite).MakeRequestAsync(_connectionLimiter);
-                        var copyRes = await RequestRepo.Copy(pfile.FullPath, destPath, ConflictResolver.Rewrite);
-                        if (!copyRes.IsSuccess) return false;
+                        try
+                        {
+                            _entryCache.RegisterOperation(pfile.FullPath, CounterOperation.Copy);
+                            _entryCache.RegisterOperation(destPath, CounterOperation.None);
 
-                        if (!doRename && WebDavPath.Name(copyRes.NewName) == newName)
-                            return true;
+                            //var copyRes = await new CopyRequest(CloudApi, pfile.FullPath, destPath, ConflictResolver.Rewrite).MakeRequestAsync(_connectionLimiter);
+                            var copyRes = await RequestRepo.Copy(pfile.FullPath, destPath, ConflictResolver.Rewrite);
+                            if (!copyRes.IsSuccess)
+                                return false;
 
-                        string newFullPath = WebDavPath.Combine(destPath, WebDavPath.Name(copyRes.NewName));
-                        return await Rename(newFullPath, pfile.Name.Replace(file.Name, newName));
+                            if (!doRename && WebDavPath.Name(copyRes.NewName) == newName)
+                                return true;
+
+                            string newFullPath = WebDavPath.Combine(destPath, WebDavPath.Name(copyRes.NewName));
+                            return await Rename(newFullPath, pfile.Name.Replace(file.Name, newName));
+                        }
+                        finally
+                        {
+                            _entryCache.UnregisterOperation(pfile.FullPath);
+                            _entryCache.UnregisterOperation(destPath);
+                        }
                     });
 
             bool res = (await Task.WhenAll(qry))
                 .All(r => r);
-
-            _entryCache.ResetCheck();
-            _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
-            _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
 
             return res;
         }
@@ -871,30 +888,39 @@ namespace YaR.Clouds
             //rename item
             if (link is null)
             {
-                var data = await RequestRepo.Rename(fullPath, newName);
-
-                if (!data.IsSuccess)
-                    return data.IsSuccess;
-
-                LinkManager?.ProcessRename(fullPath, newName);
                 string newNamePath = WebDavPath.Combine(WebDavPath.Parent(fullPath), newName);
-                _entryCache.ResetCheck();
-                _entryCache.OnCreateAsync(newNamePath, GetItemAsync(newNamePath, fastGetFromCloud: true));
-                _entryCache.OnRemoveTreeAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
+                try
+                {
+                    DateTime timestampBeforeOperation = DateTime.Now;
+                    _entryCache.RegisterOperation(fullPath, CounterOperation.Rename);
+                    _entryCache.RegisterOperation(newNamePath, CounterOperation.None);
 
-                return data.IsSuccess;
+                    var data = await RequestRepo.Rename(fullPath, newName);
+
+                    if (!data.IsSuccess)
+                        return data.IsSuccess;
+
+                    LinkManager?.ProcessRename(fullPath, newName);
+
+                    // OnRemove делать до OnCreate
+                    _entryCache.OnRemoveTree(timestampBeforeOperation,
+                        fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
+                    _entryCache.OnCreate(timestampBeforeOperation,
+                        newNamePath, GetItemAsync(newNamePath, fastGetFromCloud: true), fullPath);
+
+                    return data.IsSuccess;
+                }
+                finally
+                {
+                    _entryCache.UnregisterOperation(fullPath);
+                    _entryCache.UnregisterOperation(newNamePath);
+                }
             }
 
             //rename link
             if (LinkManager is not null)
             {
                 bool res = LinkManager.RenameLink(link, newName);
-                if (res)
-                {
-                    _entryCache.ResetCheck();
-                    _entryCache.OnCreateAsync(newName, GetItemAsync(newName, fastGetFromCloud: true));
-                    _entryCache.OnRemoveTreeAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
-                }
                 return res;
             }
             return false;
@@ -950,22 +976,31 @@ namespace YaR.Clouds
             if (link is not null)
             {
                 var remapped = await LinkManager.RemapLink(link, destinationPath);
-                if (remapped)
-                {
-                    _entryCache.ResetCheck();
-                    _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
-                    _entryCache.OnRemoveTreeAsync(folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
-                }
                 return remapped;
             }
 
-            var res = await RequestRepo.Move(folder.FullPath, destinationPath);
-            _entryCache.ResetCheck();
-            _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
-            _entryCache.OnRemoveTreeAsync(folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
+            try
+            {
+                DateTime timestampBeforeOperation = DateTime.Now;
+                _entryCache.RegisterOperation(folder.FullPath,CounterOperation.Move);
+                _entryCache.RegisterOperation(destinationPath, CounterOperation.None);
 
-            if (!res.IsSuccess)
-                return false;
+                var res = await RequestRepo.Move(folder.FullPath, destinationPath);
+
+                if (!res.IsSuccess)
+                    return false;
+
+                // OnRemove делать до OnCreate
+                _entryCache.OnRemoveTree(timestampBeforeOperation,
+                    folder.FullPath, GetItemAsync(folder.FullPath, fastGetFromCloud: true));
+                _entryCache.OnCreate(timestampBeforeOperation,
+                    destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true), folder.FullPath);
+            }
+            finally
+            {
+                _entryCache.UnregisterOperation(folder.FullPath);
+                _entryCache.UnregisterOperation(destinationPath);
+            }
 
             //clone all inner links
             if (LinkManager is not null)
@@ -1004,16 +1039,11 @@ namespace YaR.Clouds
         /// <returns>True or false operation result.</returns>
         public async Task<bool> MoveAsync(File file, string destinationPath)
         {
+            DateTime timestampBeforeOperation = DateTime.Now;
             var link = LinkManager is null ? null : await LinkManager.GetItemLink(file.FullPath, false);
             if (link is not null)
             {
                 var remapped = await LinkManager.RemapLink(link, destinationPath);
-                if (remapped)
-                {
-                    _entryCache.ResetCheck();
-                    _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
-                    _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
-                }
                 return remapped;
             }
 
@@ -1022,16 +1052,34 @@ namespace YaR.Clouds
                 .WithDegreeOfParallelism(file.Files.Count)
                 .Select(async pfile =>
                 {
-                    return await RequestRepo.Move(pfile.FullPath, destinationPath);
+                    try
+                    {
+                        _entryCache.RegisterOperation(pfile.FullPath, CounterOperation.Move);
+                        _entryCache.RegisterOperation(destinationPath, CounterOperation.None);
+
+                        var moveRes = await RequestRepo.Move(pfile.FullPath, destinationPath);
+
+                        if (!moveRes.IsSuccess)
+                            return moveRes;
+
+                        // OnRemove делать до OnCreate
+                        _entryCache.OnRemoveTree(timestampBeforeOperation,
+                            file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
+                        _entryCache.OnCreate(timestampBeforeOperation,
+                            destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true), file.FullPath);
+
+                        return moveRes;
+                    }
+                    finally
+                    {
+                        _entryCache.UnregisterOperation(pfile.FullPath);
+                        _entryCache.UnregisterOperation(destinationPath);
+                    }
                 });
 
 
             bool res = (await Task.WhenAll(qry))
                 .All(r => r.IsSuccess);
-
-            _entryCache.ResetCheck();
-            _entryCache.OnCreateAsync(destinationPath, GetItemAsync(destinationPath, fastGetFromCloud: true));
-            _entryCache.OnRemoveTreeAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
 
             return res;
         }
@@ -1130,6 +1178,8 @@ namespace YaR.Clouds
         /// <returns>True or false result operation.</returns>
         public async Task<bool> Remove(string fullPath)
         {
+            DateTime timestamp = DateTime.Now;
+
             if (LinkManager is not null)
             {
                 var link = await LinkManager.GetItemLink(fullPath, false);
@@ -1137,16 +1187,25 @@ namespace YaR.Clouds
                 {
                     // if folder is linked - do not delete inner files/folders
                     // if client deleting recursively just try to unlink folder
-                    LinkManager.RemoveLink(fullPath);
-                    _entryCache.ResetCheck();
-                    _entryCache.OnRemoveTreeAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
-                    return true;
+                    return LinkManager.RemoveLink(fullPath);
                 }
             }
 
-            var res = await RequestRepo.Remove(fullPath);
-            if (!res.IsSuccess)
-                return false;
+            try
+            {
+                _entryCache.RegisterOperation(fullPath, CounterOperation.RemoveToTrash);
+
+                var res = await RequestRepo.Remove(fullPath);
+
+                if (!res.IsSuccess)
+                    return false;
+
+                _entryCache.OnRemoveTree(timestamp, fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
+            }
+            finally
+            {
+                _entryCache.UnregisterOperation(fullPath);
+            }
 
             // remove inner links
             if (LinkManager is not null)
@@ -1155,10 +1214,7 @@ namespace YaR.Clouds
                 LinkManager.RemoveLinks(innerLinks);
             }
 
-            _entryCache.ResetCheck();
-            _entryCache.OnRemoveTreeAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
-
-            return res.IsSuccess;
+            return true;
         }
 
         #endregion == Remove ========================================================================================================================
@@ -1209,15 +1265,26 @@ namespace YaR.Clouds
 
         public async Task<bool> CreateFolderAsync(string fullPath)
         {
-            var res = await RequestRepo.CreateFolder(fullPath);
-
-            if (res.IsSuccess)
+            try
             {
-                _entryCache.ResetCheck();
-                _entryCache.OnCreateAsync(fullPath, GetItemAsync(fullPath, fastGetFromCloud: true));
+                DateTime timestampBeforeOperation = DateTime.Now;
+
+                _entryCache.RegisterOperation(fullPath, CounterOperation.NewFolder);
+
+                var res = await RequestRepo.CreateFolder(fullPath);
+
+                if (!res.IsSuccess)
+                    return false;
+
+                _entryCache.OnCreate(timestampBeforeOperation,
+                    fullPath, GetItemAsync(fullPath, fastGetFromCloud: true), null);
+            }
+            finally
+            {
+                _entryCache.UnregisterOperation(fullPath);
             }
 
-            return res.IsSuccess;
+            return true;
         }
 
         //public bool CreateFolder(string fullPath)
@@ -1228,14 +1295,27 @@ namespace YaR.Clouds
 
         public async Task<CloneItemResult> CloneItem(string toPath, string fromUrl)
         {
-            var res = await RequestRepo.CloneItem(fromUrl, toPath);
-
-            if (res.IsSuccess)
+            try
             {
-                _entryCache.ResetCheck();
-                _entryCache.OnCreateAsync(toPath, GetItemAsync(toPath, fastGetFromCloud: true));
+                DateTime timestampBeforeOperation = DateTime.Now;
+                _entryCache.RegisterOperation(toPath, CounterOperation.Copy);
+                _entryCache.RegisterOperation(fromUrl, CounterOperation.None);
+
+                var res = await RequestRepo.CloneItem(fromUrl, toPath);
+
+                if (!res.IsSuccess)
+                    return res;
+
+                _entryCache.OnCreate(timestampBeforeOperation,
+                    toPath, GetItemAsync(toPath, fastGetFromCloud: true), null);
+
+                return res;
             }
-            return res;
+            finally
+            {
+                _entryCache.UnregisterOperation(toPath);
+                _entryCache.UnregisterOperation(fromUrl);
+            }
         }
 
         public async Task<Stream> GetFileDownloadStream(File file, long? start, long? end)
@@ -1268,12 +1348,18 @@ namespace YaR.Clouds
         private void OnFileUploaded(IEnumerable<File> files)
         {
             var lst = files.ToList();
-            foreach (var file in lst)
-            {
-                _entryCache.OnCreateAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
-            }
-            _entryCache.ResetCheck();
             FileUploaded?.Invoke(lst);
+        }
+
+        public void OnBeforeUpload(string path)
+        {
+            _entryCache.RegisterOperation(path, CounterOperation.Upload);
+        }
+
+        public void OnAfterUpload(string path, DateTime timestampBeforeOperation)
+        {
+            _entryCache.OnCreate(timestampBeforeOperation, path, GetItemAsync(path, fastGetFromCloud: true), null);
+            _entryCache.UnregisterOperation(path);
         }
 
         public T DownloadFileAsJson<T>(File file)
@@ -1323,14 +1409,9 @@ namespace YaR.Clouds
 
         public bool UploadFile(string path, byte[] content, bool discardEncryption = false)
         {
-            using (var stream = GetFileUploadStream(path, content.Length, null, null, discardEncryption).Result)
-            {
-                stream.Write(content, 0, content.Length);
-            }
-
-            _entryCache.ResetCheck();
-            _entryCache.OnCreateAsync(path, GetItemAsync(path, fastGetFromCloud: true));
-
+            DateTime timestamp = DateTime.Now;
+            using var stream = GetFileUploadStream(path, content.Length, null, null, discardEncryption).Result;
+            stream.Write(content, 0, content.Length);
             return true;
         }
 
@@ -1371,11 +1452,13 @@ namespace YaR.Clouds
             if (LinkManager is null)
                 return false;
 
+            DateTime timestampBeforeOperation = DateTime.Now;
+
             var res = await LinkManager.Add(url, path, name, isFile, size, creationDate);
             if (res)
             {
                 LinkManager.Save();
-                _entryCache.OnCreateAsync(path, GetItemAsync(path, fastGetFromCloud: true));
+                _entryCache.OnCreate(timestampBeforeOperation, path, GetItemAsync(path, fastGetFromCloud: true), null);
             }
             return res;
         }
@@ -1392,15 +1475,24 @@ namespace YaR.Clouds
 
         public async Task<AddFileResult> AddFile(IFileHash hash, string fullFilePath, long size, ConflictResolver? conflict = null)
         {
-            var res = await RequestRepo.AddFile(fullFilePath, hash, size, DateTime.Now, conflict);
-
-            if (res.Success)
+            try
             {
-                _entryCache.ResetCheck();
-                _entryCache.OnCreateAsync(fullFilePath, GetItemAsync(fullFilePath, fastGetFromCloud: true));
-            }
+                DateTime timestampBeforeOperation = DateTime.Now;
+                _entryCache.RegisterOperation(fullFilePath, CounterOperation.Upload);
 
-            return res;
+                var res = await RequestRepo.AddFile(fullFilePath, hash, size, DateTime.Now, conflict);
+
+                if (!res.Success)
+                    return res;
+
+                _entryCache.OnCreate(timestampBeforeOperation, fullFilePath, GetItemAsync(fullFilePath, fastGetFromCloud: true), null);
+
+                return res;
+            }
+            finally
+            {
+                _entryCache.UnregisterOperation(fullFilePath);
+            }
         }
 
         public async Task<AddFileResult> AddFileInCloud(File fileInfo, ConflictResolver? conflict = null)
@@ -1415,15 +1507,26 @@ namespace YaR.Clouds
             if (file.LastWriteTimeUtc == dateTime)
                 return true;
 
-            var added = await RequestRepo.AddFile(file.FullPath, file.Hash, file.Size, dateTime, ConflictResolver.Rename);
-            bool res = added.Success;
-            if (res)
+            try
             {
-                file.LastWriteTimeUtc = dateTime;
-                _entryCache.OnCreateAsync(file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true));
-            }
+                DateTime timestampBeforeOperation = DateTime.Now;
+                _entryCache.RegisterOperation(file.FullPath, CounterOperation.Upload);
 
-            return res;
+                var res = await RequestRepo.AddFile(file.FullPath, file.Hash, file.Size, dateTime, ConflictResolver.Rename);
+
+                if (!res.Success)
+                    return false;
+
+                file.LastWriteTimeUtc = dateTime;
+
+                _entryCache.OnCreate(timestampBeforeOperation, file.FullPath, GetItemAsync(file.FullPath, fastGetFromCloud: true), null);
+
+                return true;
+            }
+            finally
+            {
+                _entryCache.UnregisterOperation(file.FullPath);
+            }
         }
 
         /// <summary>

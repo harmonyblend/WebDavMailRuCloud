@@ -30,8 +30,8 @@
 
   <ItemGroup>
     <PackageReference Condition="'$(TargetFramework)' == 'NET48'" Include="IndexRange" Version="1.0.3" />
-    <PackageReference Condition="'$(TargetFramework)' == 'NET48'" Include="System.Collections.Immutable" Version="7.0.0" />
-    <PackageReference Include="log4net" Version="2.0.15" />
+    <PackageReference Condition="'$(TargetFramework)' == 'NET48'" Include="System.Collections.Immutable" Version="8.0.0" />
+    <PackageReference Include="log4net" Version="3.0.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Memory" Version="4.5.5" />
     <PackageReference Include="System.Net.Http" Version="4.3.4" />

@@ -15,6 +15,10 @@ using YaR.Clouds.Base.Streams;
 using YaR.Clouds.Common;
 using Stream = System.IO.Stream;
 
+// Yandex has API version 378.1.0
+// Yandex has API version 382.2.0
+// Yandex has API version 383.0.0
+
 namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 {
     class YadWebRequestRepo2 : YadWebRequestRepo
@@ -129,12 +133,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             if (path.Path.StartsWith(YadMediaPath))
                 return await MediaFolderInfo(path.Path);
 
-            // YaD perform async deletion
-            YadResponseModel<YadItemInfoRequestData, YadItemInfoRequestParams> itemInfo = null;
-            YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderInfo = null;
-            YadResponseModel<YadResourceStatsRequestData, YadResourceStatsRequestParams> resourceStats = null;
-            YadResponseModel<List<YadActiveOperationsData>, YadActiveOperationsParams> activeOps = null;
-
             /*
              * Не менее 1 параллельного потока,
              * не более доступного по ограничителю за вычетом одного для соседних запросов,
@@ -146,10 +144,41 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
             Logger.Debug($"Listing path {path.Path}");
 
+            YadResponseModel<YadItemInfoRequestData, YadItemInfoRequestParams> itemInfo = null;
             Retry.Do(
                 () => TimeSpan.Zero,
                 () => new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
                     .With(new YadItemInfoPostModel(path.Path), out itemInfo)
+                    .MakeRequestAsync(_connectionLimiter)
+                    .Result,
+                _ => false,
+                TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryTimeout);
+
+
+            if (itemInfo is null)
+                throw new IOException("Error reading file or directory information from server");
+            if( itemInfo.Error is not null)
+                throw new IOException($"Error reading file or directory information from server {itemInfo.Error.Message}");
+            if (itemInfo.Data is null)
+                throw new IOException($"Error reading file or directory information from server");
+            if ((itemInfo?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404")
+                throw new IOException($"Error reading file or directory information from server {itemInfo.Data.Error.Title}");
+
+            // directory entiry is missing
+            if (itemInfo.Data.Type is null)
+                return null;
+
+            // it's a file
+            if (itemInfo.Data.Type == "file")
+                return itemInfo.Data.ToFile(PublicBaseUrlDefault);
+
+            // it's a folder
+            YadResponseModel<YadFolderInfoRequestData, YadFolderInfoRequestParams> folderInfo = null;
+            YadResponseModel<YadResourceStatsRequestData, YadResourceStatsRequestParams> resourceStats = null;
+            YadResponseModel<List<YadActiveOperationsData>, YadActiveOperationsParams> activeOps = null;
+            Retry.Do(
+                () => TimeSpan.Zero,
+                () => new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
                     .With(new YadFolderInfoPostModel(path.Path) { WithParent = true, Amount = firstReadLimit }, out folderInfo)
                     .With(new YadResourceStatsPostModel(path.Path), out resourceStats)
                     .With(new YadActiveOperationsPostModel(), out activeOps)
@@ -159,30 +188,26 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryTimeout);
 
 
-            if (itemInfo?.Error != null ||
-                (itemInfo?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404" ||
-                resourceStats?.Error != null ||
-                (resourceStats?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404" ||
-                folderInfo?.Error != null ||
-                (folderInfo?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404")
-            {
-                throw new IOException(string.Concat("Error reading file or directory information from server ",
-                    itemInfo?.Error?.Message,
-                    " ",
-                    itemInfo?.Data?.Error?.Message,
-                    " ",
-                    resourceStats?.Error?.Message,
-                    " ",
-                    resourceStats?.Data?.Error?.Message));
-            }
+            if (folderInfo is null)
+                throw new IOException("Error reading directory information from server");
+            if (folderInfo.Error is not null)
+                throw new IOException($"Error reading directory information from server {folderInfo.Error.Message}");
+            if (folderInfo.Data is null)
+                throw new IOException($"Error reading directory information from server");
+            if ((folderInfo?.Data?.ErrorToken ?? "HTTP_404") != "HTTP_404")
+                throw new IOException($"Error reading directory information from server {folderInfo.Data.ErrorToken}");
 
-            var entryData = itemInfo?.Data;
-            if (entryData?.Type is null)
-                return null;
-            if (entryData.Type == "file")
-                return entryData.ToFile(PublicBaseUrlDefault);
+            if (resourceStats is null)
+                throw new IOException("Error reading directory information from server");
+            if (resourceStats.Error is not null)
+                throw new IOException($"Error reading directory information from server {resourceStats.Error.Message}");
+            if (resourceStats.Data is null)
+                throw new IOException($"Error reading directory information from server");
+            if ((resourceStats?.Data?.Error?.Id ?? "HTTP_404") != "HTTP_404")
+                throw new IOException($"Error reading directory information from server {resourceStats.Data.Error.Title}");
 
-            Folder folder = folderInfo.Data.ToFolder(entryData, resourceStats.Data, path.Path, PublicBaseUrlDefault, activeOps?.Data);
+
+            Folder folder = folderInfo.Data.ToFolder(itemInfo.Data, resourceStats.Data, path.Path, PublicBaseUrlDefault, activeOps?.Data);
             folder.IsChildrenLoaded = limit == int.MaxValue;
 
             int alreadyCount = folder.Descendants.Count;
@@ -235,7 +260,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 () => TimeSpan.Zero,
                 () =>
                 {
-                    string diskPath = WebDavPath.Combine("/disk", entryData.Path);
+                    string diskPath = WebDavPath.Combine("/disk", itemInfo.Data.Path);
 
                     Parallel.For(0, info.Length, (int index) =>
                     {
@@ -250,11 +275,11 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                             .Result;
 
                         if (folderPartInfo?.Error != null ||
-                            folderPartInfo?.Data?.Error != null)
+                            folderPartInfo?.Data?.ErrorToken != null)
                             throw new IOException(string.Concat("Error reading file or directory information from server ",
                                 folderPartInfo?.Error?.Message,
                                 " ",
-                                folderPartInfo?.Data?.Error?.Message));
+                                folderPartInfo?.Data?.ErrorToken));
 
                         if (folderPartInfo?.Data is not null && folderPartInfo.Error is null)
                             info[index].Result = folderPartInfo.Data;
@@ -291,7 +316,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
 
         protected override void OnMoveCompleted(CopyResult res, string operationOpId) => WaitForOperation(operationOpId);
 
-        protected override void OnRemoveCompleted(RemoveResult res, string operationOpId) => WaitForOperation(operationOpId);
+        protected override void OnRemoveCompleted(RemoveResult res, string operationOpId) => WaitForOperation2(operationOpId);
 
         protected override void OnRenameCompleted(RenameResult res, string operationOpId) => WaitForOperation(operationOpId);
 
@@ -324,7 +349,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                      *         "target": "12-it's_uid-34:/disk/destination-folder"
                      *    },
                      */
-                    var doAgain = itemInfo.Data.Error is null && itemInfo.Data.State != "COMPLETED";
+                    var doAgain = itemInfo?.Data?.Error is null && itemInfo?.Data?.State != "COMPLETED";
                     if (doAgain)
                     {
                         if (flagWatch.Elapsed > TimeSpan.FromSeconds(30))
@@ -338,15 +363,89 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                 TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryTimeout);
         }
 
-        public override async Task<CheckUpInfo> DetectOutsideChanges()
+        protected void WaitForOperation2(string operationOpId)
+        {
+            if (string.IsNullOrWhiteSpace(operationOpId))
+                return;
+
+            var flagWatch = Stopwatch.StartNew();
+
+            //YadResponseModel<YadOperationStatusData, YadOperationStatusParams> itemInfo = null;
+            YadOperationStatusV2 itemInfo = new YadOperationStatusV2(operationOpId);
+            Retry.Do(
+                () => TimeSpan.Zero,
+                () => new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                    .With(itemInfo)
+                    .MakeRequestAsync(_connectionLimiter)
+                    .Result,
+                _ =>
+                {
+                    /*
+                     * Яндекс повторяет проверку при переносе папки каждый 9 секунд.
+                     * Когда операция завершилась: "status": "DONE", "state": "COMPLETED", "type": "move"
+                     *    "params": {
+                     *         "source": "12-it's_uid-34:/disk/source-folder",
+                     *         "target": "12-it's_uid-34:/disk/destination-folder"
+                     *    },
+                     * Когда операция еще в процессе: "status": "EXECUTING", "state": "EXECUTING", "type": "move"
+                     *    "params": {
+                     *         "source": "12-it's_uid-34:/disk/source-folder",
+                     *         "target": "12-it's_uid-34:/disk/destination-folder"
+                     *    },
+                     */
+
+                    if (itemInfo is null)
+                        throw new NullReferenceException("WaitForOperation2 itemInfo is null");
+
+                    if (itemInfo.Errors is not null)
+                    {
+                        foreach (var error in itemInfo.Errors)
+                        {
+                            Logger.Error($"WaitForOperation2 error: {error.Error.Code} {error.Error.Title}");
+                        }
+                        return true;
+                    }
+
+                    if (!itemInfo.Result.TryGetValue(operationOpId, out var state))
+                    {
+                        Logger.Error($"WaitForOperation2 failure: operation {operationOpId} is not registered");
+                        return true;
+                    }
+
+                    var doAgain = state.State != "COMPLETED";
+
+                    //Logger.Debug($"WaitForOperation2: doAgain={doAgain}, Oid={operationOpId}");
+
+                    if (doAgain)
+                    {
+                        if (flagWatch.Elapsed > TimeSpan.FromSeconds(30))
+                        {
+                            Logger.Debug("Operation is still in progress, let's wait...");
+                            flagWatch.Restart();
+                        }
+                    }
+                    return doAgain;
+                },
+                TimeSpan.FromMilliseconds(OperationStatusCheckIntervalMs), OperationStatusCheckRetryTimeout);
+        }
+
+        public override Task<CheckUpInfo> DetectOutsideChanges()
         {
             YadResponseModel<List<YadActiveOperationsData>, YadActiveOperationsParams> itemInfo = null;
 
-            _ = await new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
+            var task1 = new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
                     .With(new YadActiveOperationsPostModel(), out itemInfo)
-                    .With(new YadAccountInfoPostModel(),
-                        out YadResponseModel<YadAccountInfoRequestData, YadAccountInfoRequestParams> accountInfo)
+                    //.With(new YadAccountInfoPostModel(),
+                    //    out YadResponseModel<YadAccountInfoRequestData, YadAccountInfoRequestParams> accountInfo)
                     .MakeRequestAsync(_connectionLimiter);
+
+            // Надо учитывать, что счетчики обновляются через 10-15 секунд после операции
+            var task2 = new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                    .With(new JournalCountersV2(), out var journalCounters)
+                    .MakeRequestAsync(_connectionLimiter);
+
+            Task.WaitAll(task1, task2);
+
 
             var list = itemInfo?.Data?
                 .Select(x => new ActiveOperation
@@ -358,18 +457,21 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                     TargetPath = DtoImportYadWeb.GetOpPath(x.Data.Target),
                 })?.ToList();
 
+            var counters = journalCounters?.Result?.EventTypes;
+
             var info = new CheckUpInfo
             {
                 AccountInfo = new CheckUpInfo.CheckInfo
                 {
-                    FilesCount = accountInfo?.Data?.FilesCount ?? 0,
-                    Free = accountInfo?.Data?.Free ?? 0,
-                    Trash = accountInfo?.Data?.Trash ?? 0,
+                    //FilesCount = accountInfo?.Data?.FilesCount ?? 0,
+                    //Free = accountInfo?.Data?.Free ?? 0,
+                    //Trash = accountInfo?.Data?.Trash ?? 0,
+                    JournalCounters = new JournalCounters(journalCounters.Result)
                 },
                 ActiveOperations = list,
             };
 
-            return info;
+            return Task.FromResult(info);
         }
 
     }

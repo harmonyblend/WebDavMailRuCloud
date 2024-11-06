@@ -7,7 +7,6 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using YaR.Clouds.Base.Repos;
-using YaR.Clouds.Base.Repos.MailRuCloud;
 
 namespace YaR.Clouds.Base.Requests
 {
@@ -32,7 +31,7 @@ namespace YaR.Clouds.Base.Requests
             var uriz = new Uri(new Uri(domain), RelationalUri);
 
             // suppressing escaping is obsolete and breaks, for example, Chinese names
-            // url generated for %E2%80%8E and %E2%80%8F seems ok, but mail.ru replies error
+            // url generated for %E2%80%8E and %E2%80%8F seems OK, but mail.ru replies error
             // https://stackoverflow.com/questions/20211496/uri-ignore-special-characters
             //var udriz = new Uri(new Uri(domain), RelationalUri, true);
 
@@ -46,14 +45,25 @@ namespace YaR.Clouds.Base.Requests
             request.Proxy = _settings.Proxy;
             request.CookieContainer = _auth?.Cookies;
             request.Method = "GET";
-            request.ContentType = "application/x-www-form-urlencoded; charset=UTF-8";
+            // 21.09.2024 Заглушка для проверки, надо переделать
+            //request.ContentType = "application/x-www-form-urlencoded; charset=UTF-8";
+            request.ContentType = RelationalUri.Contains("/models-v2?")
+                ? "application/json; charset=UTF-8"
+                : "application/x-www-form-urlencoded; charset=UTF-8";
             request.Accept = "application/json";
             request.UserAgent = _settings.UserAgent;
             request.ContinueTimeout = _settings.CloudSettings.Wait100ContinueTimeoutSec * 1000;
             request.Timeout = _settings.CloudSettings.WaitResponseTimeoutSec * 1000;
             request.ReadWriteTimeout = _settings.CloudSettings.ReadWriteTimeoutSec * 1000;
-            request.AllowWriteStreamBuffering = false;
-            request.AllowReadStreamBuffering = true;
+            /*
+             * NET 4.8: When performing a write operation with AllowWriteStreamBuffering set to false,
+             * you must either set ContentLength to a non-negative number or set SendChunked to true.
+             */
+            //request.AllowWriteStreamBuffering = false;
+            /*
+             * NET 4.8: This operation is not supported.
+             */
+            //request.AllowReadStreamBuffering = true;
             request.SendChunked = false;
             request.ServicePoint.Expect100Continue = false;
             request.KeepAlive = true;
@@ -166,6 +176,7 @@ namespace YaR.Clouds.Base.Requests
 
                         if (!result.Ok || response.StatusCode != HttpStatusCode.OK)
                         {
+                            Logger.Debug($"Original request: {System.Text.Encoding.UTF8.GetString(requestContent)}");
                             var exceptionMessage =
                                 $"Request failed (status code {(int)response.StatusCode}): {result.Description}";
                             throw new RequestException(exceptionMessage)

@@ -161,6 +161,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
                         hash?.HashMd5.Value ?? string.Empty),
                     out YadResponseModel<ResourceUploadUrlData, ResourceUploadUrlParams> itemInfo)
                 .MakeRequestAsync(_connectionLimiter).Result;
+
+            if (itemInfo.Error is not null)
+                throw new Exception($"Error: {itemInfo.Error.Id}, {itemInfo.Error.Message})");
             var url = itemInfo.Data.UploadUrl;
 
             var request = new HttpRequestMessage
@@ -172,8 +175,16 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             request.Headers.Add("Accept", "*/*");
             request.Headers.TryAddWithoutValidation("User-Agent", HttpSettings.UserAgent);
 
+            /*
+             * Пробуем разные варианты решения ошибки вида
+             * Sent 3014656 request content bytes, but Content-Length promised 117811349.
+             * в методе DoUpload в строке var responseMessage = await client.SendAsync(request);
+             * Включаем Chunked и выключаем установки ContentLength, пусть framework сам считает.
+             */
+            request.Headers.TransferEncodingChunked = true;
+
             request.Content = content;
-            request.Content.Headers.ContentLength = file.OriginalSize;
+            //request.Content.Headers.ContentLength = file.OriginalSize;
 
             return (request, itemInfo?.Data?.OpId);
         }
@@ -364,12 +375,20 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             //var req = await new YadCreateFolderRequest(HttpSettings, (YadWebAuth)Authenticator, path)
             //    .MakeRequestAsync(_connectionLimiter);
 
+            /* API changed in october 2024
             await new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
                 .With(new YadCreateFolderPostModel(path),
                     out YadResponseModel<YadCreateFolderRequestData, YadCreateFolderRequestParams> itemInfo)
                 .MakeRequestAsync(_connectionLimiter);
+            */
+            await new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                .With(new YadCreateFolderPostModelV2(path), out YadCreateFolderPostModelV2 resultUnsed)
+                .MakeRequestAsync(_connectionLimiter);
+            await new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                .With(new YadResourceInfoPostModelV2(path), out YadResourceInfoPostModelV2 itemInfo)
+                .MakeRequestAsync(_connectionLimiter);
 
-            var res = itemInfo.Params.ToCreateFolderResult();
+            var res = itemInfo.ToCreateFolderResult();
             return res;
         }
 
@@ -473,48 +492,29 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             //var req = await new YadDeleteRequest(HttpSettings, (YadWebAuth)Authenticator, fullPath)
             //    .MakeRequestAsync(_connectionLimiter);
 
-            var response = await new YaDCommonV2Request(HttpSettings, (YadWebAuth)Auth)
-                .With(new YadBulkAsyncDelete(fullPath),
-                    out YadResponseModel<YadBulkAsyncDeleteRequestData, YadBulkAsyncDeleteRequestParams> itemInfo)
+            //await new YaDCommonRequest(HttpSettings, (YadWebAuth)Auth)
+            //    .With(new YadDeletePostModel(fullPath),
+            //        out YadResponseModel<YadDeleteRequestData, YadDeleteRequestParams> itemInfo)
+            //    .MakeRequestAsync(_connectionLimiter);
+            await new YaDCommonRequestV2(HttpSettings, (YadWebAuth)Auth)
+                .With(new YadDeletePostModelV2(fullPath), out var itemInfo)
                 .MakeRequestAsync(_connectionLimiter);
 
-            var res = new RemoveResult
+            //var res = itemInfo.ToRemoveResult();
+            RemoveResult res = new RemoveResult()
             {
-                IsSuccess = true,
                 DateTime = DateTime.Now,
+                IsSuccess = itemInfo?.Errors is null,
                 Path = fullPath
             };
-            
-            var opid = "";
-            if (response.Length == 0 || String.IsNullOrEmpty(response[0].OpId))
-            {
-                res.IsSuccess = false;
-            }
-            else
-            {
-                opid = response[0].OpId;
-            }
 
-            // TODO: wait operation finish and check it result
-            /*
-            https://disk.yandex.ru/models-v2?m=mpfs/bulk-operation-status
-            {"sk":"sk:time","connection_id":"____________________","apiMethod":"mpfs/bulk-operation-status","requestParams":{"oids":["_opid______________________________________________"]}}
-            ->
+            if (itemInfo?.Errors is null && itemInfo?.Result is not null)
             {
-                "_opid______________________________________________": {
-                    "status": "EXECUTING" | "DONE" | "SOMETHING_IF_ERROR",
-                    "params": {
-                        "path": "_id____:/disk/path/to/delete"
-                    },
-                    "state": "EXECUTING" | "COMPLETED",
-                    "at_version": 00000000000,
-                    "type": "trash",
-                    "resource": undefined | complex_object_at_done
-                }
-            }
-            */
+                string oid = itemInfo.Result;
+                Logger.Debug($"{fullPath} уделен, Oid={oid}");
 
-            OnRemoveCompleted(res, opid);
+                OnRemoveCompleted(res, oid);
+            }
 
             return res;
         }

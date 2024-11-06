@@ -169,7 +169,7 @@ namespace YaR.Clouds.Links
                 return false;
 
             _itemList.Items.Remove(z);
-            _linkCache.OnRemoveTreeAsync(path, null);
+            _linkCache.OnRemoveTree(DateTime.MaxValue, path, null);
 
             if (doSave)
                 Save();

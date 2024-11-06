@@ -212,6 +212,16 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb
             };
             return res;
         }
+        
+        public static CreateFolderResult ToCreateFolderResult(this YadResourceInfoPostModelV2 data)
+        {
+            var res = new CreateFolderResult
+            {
+                IsSuccess = true,
+                Path = data.Result.Path.Remove(0, "/disk".Length)
+            };
+            return res;
+        }
 
         public static CopyResult ToCopyResult(this YadResponseModel<YadCopyRequestData, YadCopyRequestParams> data)
         {

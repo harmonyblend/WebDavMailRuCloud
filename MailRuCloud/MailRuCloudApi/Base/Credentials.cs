@@ -559,8 +559,10 @@ public partial class Credentials : IBasicCredentials
         else
         {
             string text = string.IsNullOrEmpty(response?.ErrorMessage)
-                ? "Authentication using BrowserAuthenticator application is failed!"
-                : string.Concat("Authentication using BrowserAuthenticator application is failed! ", response.ErrorMessage);
+                ? "Authentication using BrowserAuthenticator application is failed! " +
+                    "Check password for the BrowserAuthenticator!"
+                : string.Concat("Authentication using BrowserAuthenticator application is failed! " +
+                    "Check password for the BrowserAuthenticator! ", response.ErrorMessage);
 
             Logger.Error(text);
             throw new AuthenticationException(text);
