@@ -112,20 +112,8 @@ internal class YadAuthPasswordRequest : BaseRequestJson<YadAuthPasswordRequestRe
                     "In case you a sure you have used the main password, try to renew the main password.");
             }
 
-<<<<<<< HEAD
-            if (res.Result.State == "rfc_totp")
-            {
-                return res;
-            }
-
-            var uid = responseHeaders["X-Default-UID"];
-            if (string.IsNullOrWhiteSpace(uid))
-                throw new AuthenticationException("Cannot get X-Default-UID");
-            res.Result.DefaultUid = uid;
-=======
             throw new AuthenticationException("Authentication failed: " + string.Join(", ", res.Result.Errors));
         }
->>>>>>> upstream/totp-by-harmonyblend
 
         if (res.Result.State == "rfc_totp")
         {

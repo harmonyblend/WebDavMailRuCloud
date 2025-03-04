@@ -12,11 +12,7 @@ using YaR.Clouds.Base.Requests;
 
 namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 {
-<<<<<<< HEAD
-    class YadAuthTotpRequest : BaseRequestJson<YadAuthTotpRequestResult>
-=======
     internal class YadAuthTotpRequest : BaseRequestJson<YadAuthTotpRequestResult>
->>>>>>> upstream/totp-by-harmonyblend
     {
         private readonly string _csrf;
         private readonly string _trackId;
@@ -56,10 +52,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
         protected override byte[] CreateHttpContent()
         {
-<<<<<<< HEAD
-
-=======
->>>>>>> upstream/totp-by-harmonyblend
             var bytes = Base32Encoding.ToBytes(_totpSecret);
 
             var totp = new Totp(bytes);
@@ -69,11 +61,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
             {
                 Thread.Sleep(TimeSpan.FromSeconds(4));
             }
-<<<<<<< HEAD
-            var result = totp.ComputeTotp();            
-=======
             var result = totp.ComputeTotp();
->>>>>>> upstream/totp-by-harmonyblend
 
 
             var keyValues = new List<KeyValuePair<string, string>>
@@ -99,11 +87,7 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
         }
     }
 
-<<<<<<< HEAD
-    class YadAuthTotpRequestResult
-=======
     internal class YadAuthTotpRequestResult
->>>>>>> upstream/totp-by-harmonyblend
     {
         public bool HasError => Status == "error";
 
@@ -119,15 +103,9 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
     public class Totp
     {
-<<<<<<< HEAD
-        const long unixEpochTicks = 621355968000000000L;
-
-        const long ticksToSeconds = 10000000L;
-=======
         private const long unixEpochTicks = 621355968000000000L;
 
         private const long ticksToSeconds = 10000000L;
->>>>>>> upstream/totp-by-harmonyblend
 
         private const int step = 30;
 
@@ -186,10 +164,6 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
             var truncatedValue = ((int)input % (int)Math.Pow(10, digitCount));
             return truncatedValue.ToString().PadLeft(digitCount, '0');
         }
-<<<<<<< HEAD
-
-=======
->>>>>>> upstream/totp-by-harmonyblend
     }
 
 
@@ -314,12 +288,5 @@ namespace YaR.Clouds.Base.Repos.YandexDisk.YadWeb.Requests
 
             throw new ArgumentException("Byte is not a value Base32 value.", "b");
         }
-<<<<<<< HEAD
-
-    }
-
-}
-=======
     }
 }
->>>>>>> upstream/totp-by-harmonyblend
